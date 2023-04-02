@@ -1,0 +1,6 @@
+[submodule "lib/ssm-runtime"]
+	path = lib/ssm-runtime
+	url = git@github.com:ssm-lang/ssm-runtime.git
+[submodule "lib/pico-sdk"]
+	path = lib/pico-sdk
+	url = git@github.com:raspberrypi/pico-sdk.git
