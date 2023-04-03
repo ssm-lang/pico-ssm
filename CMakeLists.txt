@@ -15,7 +15,7 @@ add_executable(mytest
     src/main.c
     src/pico-tick.c
     src/pico-throw.c
-    src/ssm-app.c
+    src/blinky.c
 )
 
 add_subdirectory(lib)

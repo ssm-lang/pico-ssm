@@ -4,6 +4,7 @@
 
 int main(void) {
   stdio_init_all();
+
   printf("Hello world!\n");
 
   ssm_platform_entry();
