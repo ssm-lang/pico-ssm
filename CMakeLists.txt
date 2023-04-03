@@ -10,12 +10,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 pico_sdk_init()
 
-add_executable(test src/main.c)
 
-target_link_libraries(
-    test
+add_executable(mytest src/main.c)
+
+add_subdirectory(lib)
+target_link_libraries(mytest
     pico_stdlib
     hardware_flash
+    ssm-runtime
 )
 
 set_target_properties(pico_stdlib
@@ -24,9 +26,9 @@ set_target_properties(pico_stdlib
   ENABLE_EXPORTS TRUE
 )
 
-pico_enable_stdio_usb(test 0)
-pico_enable_stdio_uart(test 1)
-pico_enable_stdio_semihosting(test 0)
-pico_add_extra_outputs(test)
-# pico_set_binary_type(test no_flash)
-# pico_set_binary_type(test copy_to_ram)
+pico_enable_stdio_usb(mytest 0)
+pico_enable_stdio_uart(mytest 1)
+pico_enable_stdio_semihosting(mytest 0)
+pico_add_extra_outputs(mytest)
+# pico_set_binary_type(mytest no_flash)
+# pico_set_binary_type(mytest copy_to_ram)
