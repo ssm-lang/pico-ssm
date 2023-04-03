@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-include (cmake/ensure_submodules.cmake)
+include (cmake/ensure_libs.cmake)
 include(cmake/pico_sdk_import.cmake)
 
 project(mytest_project C CXX ASM)

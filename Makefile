@@ -1,12 +1,11 @@
-PICO_SDK_PATH=$(abspath lib/pico-sdk)
 TARGET_NAME=mytest
 
 .PHONY: compile
 compile: | build
-	PICO_SDK_PATH=$(PICO_SDK_PATH) cmake --build build --config Debug
+	cmake --build build --config Debug
 
 build: CMakeLists.txt Makefile
-	PICO_SDK_PATH=$(PICO_SDK_PATH) cmake -S . -B $@ -DCMAKE_BUILD_TYPE=Debug
+	cmake -S . -B $@ -DCMAKE_BUILD_TYPE=Debug
 
 .PHONY: clean
 clean:

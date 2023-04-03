@@ -30,3 +30,5 @@ endif()
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/ssm-runtime/Makefile")
     message(FATAL_ERROR "ssm-runtime was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
+
+set(PICO_SDK_PATH ${CMAKE_SOURCE_DIR}/lib/pico-sdk)
