@@ -14,9 +14,13 @@ add_executable(mytest)
 
 add_subdirectory(src)
 
+add_subdirectory(pio)
+
 add_subdirectory(lib)
+
 target_link_libraries(mytest
     pico_stdlib
+    hardware_pio
     hardware_flash
     ssm-runtime
 )
