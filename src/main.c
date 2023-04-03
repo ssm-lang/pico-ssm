@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <pico/stdlib.h>
-#include <ssm-internal.h>
-
-ssm_value_t v;
+#include <ssm-platform.h>
 
 int main(void) {
   stdio_init_all();
   printf("Hello world!\n");
+
+  ssm_platform_entry();
+
   return 0;
 }

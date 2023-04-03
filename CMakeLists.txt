@@ -11,7 +11,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 pico_sdk_init()
 
 
-add_executable(mytest src/main.c)
+add_executable(mytest
+    src/main.c
+    src/pico-tick.c
+    src/pico-throw.c
+    src/ssm-app.c
+)
 
 add_subdirectory(lib)
 target_link_libraries(mytest
