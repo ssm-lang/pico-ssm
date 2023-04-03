@@ -54,6 +54,8 @@ int ssm_platform_entry(void) {
       return -1;
   }
 
+  ssm_mem_init(&alloc_page, &alloc_mem, &free_mem);
+
   sem_init(&ssm_tick_sem, 0, 1);
 
   setup_entry_point();
