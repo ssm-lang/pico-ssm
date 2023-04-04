@@ -28,12 +28,6 @@ target_link_libraries(mytest
     ssm-runtime
 )
 
-set_target_properties(pico_stdlib
-  PROPERTIES
-  CMAKE_EXPORT_COMPILE_COMMANDS ON
-  ENABLE_EXPORTS TRUE
-)
-
 pico_enable_stdio_usb(mytest 0)
 pico_enable_stdio_uart(mytest 1)
 pico_enable_stdio_semihosting(mytest 0)
