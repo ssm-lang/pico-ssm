@@ -1,29 +1,52 @@
-TARGET_NAME=mytest
+TARGET=mytest
+TARGET_ELF=./build/$(TARGET).elf
 
-.PHONY: compile
+GDB=$(if $(shell which arm-none-eabi-gdb),arm-none-eabi-gdb,gdb-multiarch)
+PYOCD=pyocd
+
+COMMANDS += compile
 compile: | build
 	cmake --build build --config Debug --parallel $$(nproc)
 
+COMMANDS += build
 build: CMakeLists.txt Makefile
 	cmake -S . -B $@ -DCMAKE_BUILD_TYPE=Debug
 
-.PHONY: clean
+COMMANDS += clean
 clean:
 	rm -rf build
 
-.PHONY: debug
-debug: compile
-	arm-none-eabi-gdb
+### Using pyOCD + gdb
 
-.PHONY: flash
+COMMANDS += flash
 flash: compile
-	picotool load build/$(TARGET_NAME).uf2 && picotool reboot
+	pyocd flash -t rp2040 $(TARGET_ELF)
 
-.PHONY: bootloader
-bootloader:
-	picotool reboot -u -f
+COMMANDS += reset
+reset:
+	pyocd reset -t rp2040
 
-.PHONY:
-submodules:
-	git submodule update --init
-	cd $(PICO_SDK_PATH) && git submodule update --init
+COMMANDS += debug
+debug: compile
+	killall pyocd || true
+	pyocd gdb -t rp2040 -f10m &
+	$(GDB) $(TARGET_ELF) \
+		--init-eval-command="set arch arm" \
+		--init-eval-command="target extended-remote localhost:3333" \
+		--init-eval-command="set mem inaccessible-by-default off"
+	killall pyocd || true
+
+# Using picotool
+# COMMANDS += flash
+# flash: compile
+# 	picotool load build/$(TARGET).uf2 && picotool reboot
+#
+# COMMANDS += bootloader
+# bootloader:
+# 	picotool reboot -u -f
+
+COMMANDS += help
+help:
+	@echo Available make commands: $(COMMANDS)
+
+.PHONY: $(COMMANDS)
