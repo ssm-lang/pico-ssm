@@ -165,7 +165,7 @@ void __step_blink(ssm_act_t *actg)
             
           __label_4:
             ;
-            ssm_closure_apply((ssm_value_t) {.heap_ptr = &__closure_ms.mm}, ssm_marshal((uint32_t) 50), actg,
+            ssm_closure_apply((ssm_value_t) {.heap_ptr = &__closure_ms.mm}, ssm_marshal((uint32_t) 500), actg,
                               actg->priority, actg->depth, &acts->__tmp_7);
             if (ssm_has_children(actg)) {
                 actg->pc = 1;
@@ -185,7 +185,7 @@ void __step_blink(ssm_act_t *actg)
             ssm_desensitize(&acts->__trig_1);
             acts->__tmp_8 = ssm_deref(acts->led);
             blink(acts->__tmp_8);
-            ssm_closure_apply((ssm_value_t) {.heap_ptr = &__closure_ms.mm}, ssm_marshal((uint32_t) 50), actg,
+            ssm_closure_apply((ssm_value_t) {.heap_ptr = &__closure_ms.mm}, ssm_marshal((uint32_t) 500), actg,
                               actg->priority, actg->depth, &acts->__tmp_9);
             if (ssm_has_children(actg)) {
                 actg->pc = 3;

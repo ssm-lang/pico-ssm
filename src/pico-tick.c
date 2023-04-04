@@ -74,7 +74,7 @@ int ssm_platform_entry(void) {
   for (;;) {
     ssm_time_t next_time, wall_time;
 
-    wall_time = (to_us_since_boot(get_absolute_time()) - to_us_since_boot(origin)) /* * 1000 */;
+    wall_time = (to_us_since_boot(get_absolute_time()) - to_us_since_boot(origin)) * 1000;
     next_time = ssm_next_event_time();
 
     __compiler_memory_barrier();
@@ -95,7 +95,7 @@ int ssm_platform_entry(void) {
 
         sem_acquire_blocking(&ssm_tick_sem);
       } else {
-        if (!hardware_alarm_set_target(alarm_num, delayed_by_us(origin, next_time /* / 1000 */))) {
+        if (!hardware_alarm_set_target(alarm_num, delayed_by_us(origin, next_time / 1000))) {
           sem_acquire_blocking(&ssm_tick_sem);
         } else {
           // Target missed
