@@ -84,6 +84,8 @@ The pyOCD command is provided as a Make target for convenience:
 make flash
 ```
 
+> **NOTE** The default UART baud rate is 115200, with TX on GP0 and RX on GP1.
+
 ## Debugging
 
 You can debug programs on the Pico using a debug probe such as a
