@@ -2,7 +2,7 @@ TARGET_NAME=mytest
 
 .PHONY: compile
 compile: | build
-	cmake --build build --config Debug
+	cmake --build build --config Debug --parallel $$(nproc)
 
 build: CMakeLists.txt Makefile
 	cmake -S . -B $@ -DCMAKE_BUILD_TYPE=Debug
