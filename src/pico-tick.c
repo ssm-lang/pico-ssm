@@ -1,6 +1,8 @@
 #include "hardware/sync.h"
 #include "hardware/timer.h"
 #include "pico/platform.h"
+#include "pico/time.h"
+#include "pico/types.h"
 #include <ssm-internal.h>
 #include <ssm-platform.h>
 #include <pico/sem.h>
@@ -53,6 +55,12 @@ int ssm_platform_entry(void) {
       printf("Error: could not claim alarm!\n");
       return -1;
   }
+  hardware_alarm_set_callback(alarm_num, wake_up);
+
+  // NOTE: we will use pico's absolute_time_t APIs
+
+  // Start time (i.e., treat this as wall-clock time 0)
+  absolute_time_t origin = get_absolute_time();
 
   ssm_mem_init(&alloc_page, &alloc_mem, &free_mem);
 
@@ -66,7 +74,7 @@ int ssm_platform_entry(void) {
   for (;;) {
     ssm_time_t next_time, wall_time;
 
-    wall_time = time_us_64() * 1000;
+    wall_time = (to_us_since_boot(get_absolute_time()) - to_us_since_boot(origin)) /* * 1000 */;
     next_time = ssm_next_event_time();
 
     __compiler_memory_barrier();
@@ -87,16 +95,13 @@ int ssm_platform_entry(void) {
 
         sem_acquire_blocking(&ssm_tick_sem);
       } else {
-
-        // TODO: what order to call these in??
-        hardware_alarm_set_callback(alarm_num, wake_up);
-        if (hardware_alarm_set_target(alarm_num, from_us_since_boot(next_time / 1000))) {
+        if (!hardware_alarm_set_target(alarm_num, delayed_by_us(origin, next_time /* / 1000 */))) {
+          sem_acquire_blocking(&ssm_tick_sem);
+        } else {
           // Target missed
+          printf("WARN: target missed\n");
         }
-
-        sem_acquire_blocking(&ssm_tick_sem);
-
-        sem_reset(&ssm_tick_sem, 1);
+        sem_reset(&ssm_tick_sem, 0);
       }
     }
   }
