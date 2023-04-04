@@ -28,13 +28,14 @@ reset:
 
 COMMANDS += debug
 debug: compile
-	killall pyocd || true
-	pyocd gdb -t rp2040 -f10m &
-	$(GDB) $(TARGET_ELF) \
-		--init-eval-command="set arch arm" \
-		--init-eval-command="target extended-remote localhost:3333" \
-		--init-eval-command="set mem inaccessible-by-default off"
-	killall pyocd || true
+	@if ! [ -f .gdbinit ] ; then \
+		echo ; \
+		echo "Error: no .gdbinit file. This is usually necessary for remote debugging." ; \
+		echo "Consider copying/symlinking something from ./gdb/." ; \
+		echo ; \
+		exit 1 ; \
+	fi
+	$(GDB) $(TARGET_ELF)
 
 # Using picotool
 # COMMANDS += flash
