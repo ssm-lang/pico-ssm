@@ -129,3 +129,16 @@ The GDB command is provided as a Make target for convenience:
 ```sh
 make debug
 ```
+
+Some useful GDB commands:
+
+-   `load`: flash the program onto the chip
+-   `b`/`break`: set a breakpoint
+-   `s`/`step`: step through one line in your program, stepping into functions
+-   `n`/`next`: step through one line in your program, without stepping into functions
+-   `c`/`continue`: keep running until a breakpoint
+-   `layout`: adjust the layout of the GDB TUI to show source code, assembly code, and/or registers
+-   `p`/`print`: print the value of an expression
+-   `h`/`help`: seek help about command usage
+
+TODO: try out semihosting
