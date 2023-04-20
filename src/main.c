@@ -5,7 +5,7 @@
 #include <pico/stdlib.h>
 
 #include "hardware/sync.h"
-#include "hello.pio.h"
+#include "ssm.pio.h"
 #include "pico/time.h"
 #include "pico/types.h"
 
@@ -29,9 +29,9 @@ static void alarm_cb(uint _alarm_num) {
 
 void setup_pio(void) {
   // Copied from pico-examples
-  uint offset = pio_add_program(pio0, &hello_program);
-  sm = pio_claim_unused_sm(pio0, true);
-  hello_program_init(pio0, sm, offset, PICO_DEFAULT_LED_PIN);
+  // uint offset = pio_add_program(pio0, &hello_program);
+  // sm = pio_claim_unused_sm(pio0, true);
+  // hello_program_init(pio0, sm, offset, PICO_DEFAULT_LED_PIN);
 
   pio_sm_put_blocking(pio0, sm, 1);
   sleep_ms(200);

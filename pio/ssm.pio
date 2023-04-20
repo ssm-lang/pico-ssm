@@ -3,6 +3,7 @@
 ; Between iterations:
 ; - X holds previous GPIO value
 ; - Y holds counter (decremented every 6 instructions)
+; - OSR is used to back up Y between cmp and update
 ;
 ; This program is pipelined to increase the frequency at which the counter is
 ; updated (which also determines the granularity of timestamping).
@@ -29,9 +30,12 @@
 ;
 ; TODO: determine IRQ number
 
+.define PUBLIC SSM_INPUT_IRQ_NUM 0
+
 .program ssm_input
-    set osr, 0
-    set y, 0
+    in pins, 32         ; ISR <- read GPIO
+    mov x, isr          ; X <- ISR
+    set y, 0            ; Y <- 0
 .wrap_target
 cmp:
     mov osr, y          ; OSR <- Y (back up counter)
@@ -54,7 +58,7 @@ update:
     push noblock        ; FIFO <- ISR
     mov isr, osr        ; ISR <- OSR (currently storing counter)
     push noblock        ; FIFO <- ISR
-    irq N nowait        ; send interrupt
+    irq nowait SSM_INPUT_IRQ_NUM ; notify CPU
     mov y, osr          ; Y <- OSR (restore counter)
     jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
     jmp y--, cmp        ; Y--, always loops back to cmp
