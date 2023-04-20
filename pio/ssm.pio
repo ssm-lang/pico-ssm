@@ -2,37 +2,39 @@
 ;
 ; Between iterations:
 ; - X holds previous GPIO value
-; - Y holds counter
+; - Y holds counter (decremented every 8 instructions)
 ;
-; Each iteration is 11 instructions, which determines the time granularity of
-; our counter.
+; This program is pipelined, to increase the frequency at which the counter is
+; updated (which also determines the granularity of timestamping).
 ;
 ; TODO: determine IRQ number
-; TODO: increase counter frequency?
 
 .program ssm_input
     set osr, 0
     set y, 0
 .wrap_target
-begin:
-    jmp y-- cmp     ; Y-- (decrement counter)
 cmp:
-    in pins, 32     ; ISR <- read GPIO
-    mov osr, y      ; OSR <- Y (back up counter)
-    mov y, isr      ; Y <- ISR
-    jmp x!=y update ; Compare prev with cur
-    nop             ; No change, so we stall for same number of cycles
-    nop             ; as update block so the counter decrements uniformly
-    nop             ; (could also be done with delay)
-    jmp end         ; goto end
+    in pins, 32         ; ISR <- read GPIO
+    mov osr, y          ; OSR <- Y (back up counter)
+    mov y, isr          ; Y <- ISR
+    jmp x!=y, update    ; Compare prev with cur
+    nop                 ; Stall to 8-align instructions
+    nop                 ; Stall to 8-align instructions
+    mov y, osr          ; Y <- OSR (restore counter)
+resume:
+    jmp y--, cmp        ; Y--, resume cmp
 update:
-    push noblock    ; FIFO <- ISR
-    mov isr, osr    ; ISR <- OSR (currently storing counter)
-    push noblock    ; FIFO <- ISR
-    irq N nowait    ; send interrupt
-end:
-    mov x, y        ; X <- Y (set prev to cur)
-    mov y, osr      ; Y <- OSR (currently storing counter)
+    push noblock        ; FIFO <- ISR
+    mov x, isr          ; X <- ISR (set prev to cur)
+    mov isr, osr        ; ISR <- OSR (currently storing counter)
+    push noblock        ; FIFO <- ISR
+    irq N nowait        ; send interrupt
+    nop                 ; Stall to 8-align instructions
+    nop                 ; Stall to 8-align instructions
+    nop                 ; Stall to 8-align instructions
+    nop                 ; Stall to 8-align instructions
+    mov y, osr          ; Y <- OSR (restore counter)
+    jmp y--, resume     ; Resume cmp
 .wrap
 
 % c-sdk {
@@ -57,7 +59,7 @@ static inline void ssm_input_program_init(PIO pio, uint sm, uint offset, uint pi
 ; Output program
 ;
 ; Between loops:
-; - X holds the counter, decremented every 4 instructions
+; - X holds the counter (decremented every 4 instructions)
 ; - Y holds the target time
 ;
 ; This program consists of two loops: the poll loop and the hold loop. Each loop
