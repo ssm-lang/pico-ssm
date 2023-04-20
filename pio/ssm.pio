@@ -109,7 +109,11 @@ static inline void ssm_input_program_init(PIO pio, uint sm, uint offset, uint pi
 .wrap_target
 poll:
     pull noblock            ; OSR <- FIFO else X
-    mov y, osr              ; Y <- OSR
+    mov y, osr              ; Y <- OSR  (load for comparison)
+    jmp x!=y, hold_new      ; X != Y    (new packet received)
+    jmp x--, poll           ; X--       (no packet received)
+    pull noblock            ; spillover (no jump when X is zero)
+    mov y, osr              ; Y <- OSR  (load for comparison)
     jmp x!=y, hold_new      ; X != Y    (new packet received)
     jmp x--, poll           ; X--       (no packet received)
 hold_stall:
