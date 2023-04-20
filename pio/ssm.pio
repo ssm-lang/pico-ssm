@@ -1,0 +1,143 @@
+; Input program
+;
+; Between iterations:
+; - X holds previous GPIO value
+; - Y holds counter
+;
+; Each iteration is 11 instructions, which determines the time granularity of
+; our counter.
+;
+; TODO: determine IRQ number
+; TODO: increase counter frequency?
+
+.program ssm_input
+    set osr, 0
+    set y, 0
+.wrap_target
+begin:
+    jmp y-- cmp     ; Y-- (decrement counter)
+cmp:
+    in pins, 32     ; ISR <- read GPIO
+    mov osr, y      ; OSR <- Y (back up counter)
+    mov y, isr      ; Y <- ISR
+    jmp x!=y update ; Compare prev with cur
+    nop             ; No change, so we stall for same number of cycles
+    nop             ; as update block so the counter decrements uniformly
+    nop             ; (could also be done with delay)
+    jmp end         ; goto end
+update:
+    push noblock    ; FIFO <- ISR
+    mov isr, osr    ; ISR <- OSR (currently storing counter)
+    push noblock    ; FIFO <- ISR
+    irq N nowait    ; send interrupt
+end:
+    mov x, y        ; X <- Y (set prev to cur)
+    mov y, osr      ; Y <- OSR (currently storing counter)
+.wrap
+
+% c-sdk {
+static inline void ssm_input_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = ssm_input_program_get_default_config(offset);
+
+    // Map the state machine's OUT pin group to one pin, namely the `pin`
+    // parameter to this function.
+    sm_config_set_out_pins(&c, pin, 1);
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, pin);
+    // Set the pin direction to output at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+; Output program
+;
+; Between loops:
+; - X holds the counter, decremented every 4 instructions
+; - Y holds the target time
+;
+; This program consists of two loops: the poll loop and the hold loop. Each loop
+; always consists of exactly four instructions, and decrements X exactly once
+; each loop iteration.
+;
+; The poll loop polls for packets from the user, containing the target time.
+; If no packet is present, pull noblock will load OSR with the contents of
+; register X (holding the counter), so if X and OSR are equal, then no packet is
+; received. The target time MUST be less than 2^32-1 away from the current
+; counter value in order to be considered (but then again this is necessary
+; anyway to account for wraparound).
+;
+; The hold loop waits for the counter to reach the target time. There are
+; a bunch of nops to ensure that the counter is always decremented at the same
+; rate. When the target time is reached, the GPIO output is read from the FIFO
+; and written to the pins.
+;
+; FIFO protocol: (target_time ; gpio_out)
+;                ---------- time -------->
+;
+; NOTE: the CPU MUST:
+;   - write target times in decreasing (chronologically increasing) order
+;   - write target_time less than 2^32-1 away from the current counter
+;   - write target_time more than 2 away from the current counter
+;   - write target_time more than 2 away from the previous target_time
+;   - always write two consecutive packets, target_time and gpio_out
+;   - write the gpio_out the FIFO before target_time expires
+;
+; TODO: consider this:
+;
+; If the CPU cannot guarantee to write gpio_out before target_time expires,
+; there is an alternate implementation that leverages another separate state
+; machine to specifically handle GPIO outputs. This also has the following
+; advantages and disadvantages:
+;
+;   - doubles the effective size of the FIFO
+;   - guarantees not to reinterpret target time as GPIO output, so output won't
+;     be totally corrupted due to unexpected CPU stalling
+;   - halves the number of state machines available (if we care about this)
+;
+; It's not that much more complicated; this ssm_output program can be easily
+; adapted to support that.
+;
+.program ssm_output
+    set x, 0                ; X <- 0
+.wrap_target
+poll:
+    pull noblock            ; OSR <- FIFO else X
+    mov y, osr              ; Y <- OSR
+    jmp x!=y, hold_new      ; X != Y    (new packet received)
+    jmp x--, poll           ; X--       (no packet received)
+hold_stall:
+    nop                     ; Need to stall 3 more cycles before next hold loop
+    nop                     ; iteration to align 4-instruction cycle
+hold_new:
+    jmp x--, hold           ; X--, enter hold loop
+hold:
+    jmp x!=y, hold_stall    ; X != Y (target time not reached)
+    pull noblock            ; OSR <- FIFO else X (which would be garbage)
+    out pins, 32            ; Write output to GPIO pins
+    jmp x--, poll           ; X--, return to poll loop
+.wrap
+
+% c-sdk {
+static inline void ssm_output_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = ssm_output_program_get_default_config(offset);
+
+    // Map the state machine's OUT pin group to one pin, namely the `pin`
+    // parameter to this function.
+    sm_config_set_out_pins(&c, pin, 1);
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, pin);
+    // Set the pin direction to output at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
