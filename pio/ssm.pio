@@ -203,35 +203,54 @@ hold:
 .wrap
 
 % c-sdk {
-static inline int ssm_output_program_start(PIO pio, uint pin_base, uint pin_count) {
-    if (!pio_can_add_program(pio, &ssm_input_program))
+/*! \brief Initialize ssm_output on a state machine for a particular PIO device.
+ *
+ * This program will allocate the state machine used to execute this program,
+ * and determine the offset at where the ssm_output program will be loaded. It
+ * then performs some initialization and loads that program.
+ *
+ * This helper function takes a GPIO \a pin_mask, where each bit indicates
+ * whether that GPIO index should be used for output. According to that bitmask,
+ * this helper will:
+ *
+ * - configure the GPIO pin to be driven by this PIO device (using pio_gpio_init())
+ * - set the pin direction to output (using pio_sm_set_pindirs_with_mask())
+ *
+ * The caller is still responsible for starting the state machine using
+ * pio_set_enabled() or pio_set_sm_mask_enabled().
+ *
+ * \param pio           The PIO instance; either \ref pio0 or \ref pio1
+ * \param pin_mask      Mask of GPIO pins to be used for output
+ * \return              State machine where program is installed; negative if error
+ */
+static inline int ssm_output_program_init(PIO pio, uint32_t pin_mask) {
+    if (!pio_can_add_program(pio, &ssm_output_program))
         // Can't add program
         return -1;
 
-    uint offset = pio_add_program(pio, &ssm_input_program);
+    uint offset = pio_add_program(pio, &ssm_output_program);
 
     int sm = pio_claim_unused_sm(pio, false);
     if (sm < 0)
         // No state machines available at pio
         return -1;
 
+    // Obtain default PIO configuration
     pio_sm_config c = ssm_output_program_get_default_config(offset);
 
-    // Set GPIO output pins according to parameters
-    sm_config_set_out_pins(&c, pin_base, pin_count);
+    // We're addressing GPIO pins in a 0-indexed fashion
+    sm_config_set_out_pins(&c, 0, 32);
 
-    // Connect GPIO pins to PIO for output
-    for (int i = 0; i < pin_count; i++)
-        pio_gpio_init(pio, pin_base + i);
+    // Configure the pins we're using for output to be driven by this PIO device
+    for (int pin_idx = 0; pin_idx < 32; pin_idx++)
+        if ((0x1 << pin_idx) & pin_mask)
+            pio_gpio_init(pio, pin_idx);
 
-    // On our state machine, set the pins' direction to output
-    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, true);
+    // For all pins in pin_mask, set the direction to output
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, pin_mask);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
-
-    // Set the state machine running
-    pio_sm_set_enabled(pio, sm, true);
 
     return sm;
 }
