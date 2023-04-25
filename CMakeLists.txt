@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-include (cmake/ensure_libs.cmake)
+include(cmake/ensure_libs.cmake)
 include(cmake/pico_sdk_import.cmake)
 
 project(mytest_project C CXX ASM)
@@ -10,27 +10,16 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-
 pico_sdk_init()
 
-add_executable(mytest)
-
-add_subdirectory(src)
-
-add_subdirectory(pio)
-
+# Defines the ssm-runtime library
 add_subdirectory(lib)
 
-target_link_libraries(mytest
-    pico_stdlib
-    hardware_pio
-    hardware_flash
-    ssm-runtime
-)
+# Defines the ssm-pio-header (header-only) and ssm-pio libraries
+add_subdirectory(pio)
 
-pico_enable_stdio_usb(mytest 0)
-pico_enable_stdio_uart(mytest 1)
-pico_enable_stdio_semihosting(mytest 0)
-pico_add_extra_outputs(mytest)
-# pico_set_binary_type(mytest no_flash)
-# pico_set_binary_type(mytest copy_to_ram)
+# Where we can write unit tests for
+add_subdirectory(tests)
+
+# Where our main application
+add_subdirectory(src)
