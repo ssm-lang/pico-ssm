@@ -6,7 +6,8 @@
 # include only ssm-pio and test each PIO program in isolation, without involving
 # compilation units included in the ssm-pio library.
 add_library(ssm-pio-header INTERFACE)
-pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm.pio)
+pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-input.pio)
+pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
 
 add_library(ssm-pio INTERFACE)
 target_link_libraries(ssm-pio

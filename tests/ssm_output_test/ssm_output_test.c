@@ -3,10 +3,10 @@
 #include <hardware/clocks.h>
 #include <pico/stdlib.h>
 
-#include "ssm.pio.h"
+#include "ssm-output.pio.h"
 
 #ifndef PICO_DEFAULT_LED_PIN
-#error pio/hello_pio example requires a board with a regular LED
+#error This program requires a board with a regular LED
 #endif
 
 uint32_t clk_sys_hz = 125000000; // Default is (usually) 125MHz (?)
@@ -22,7 +22,7 @@ int main(void) {
 
   sleep_ms(500);
 
-  printf("=== Initialized ssm_output_test ===\n");
+  printf("\n\n=== Initialized ssm_output_test ===\n");
 
   clk_sys_hz = clock_get_hz(clk_sys);
 
@@ -47,14 +47,15 @@ int main(void) {
 
     printf("Epoch starting at %u seconds...\n", base);
 
-    pio_sm_put(pio0, sm, ssm_ms(base + 400));
-    pio_sm_put(pio0, sm, pin_mask);
-    pio_sm_put(pio0, sm, ssm_ms(base + 800));
-    pio_sm_put(pio0, sm, 0);
-    pio_sm_put(pio0, sm, ssm_ms(base + 1200));
-    pio_sm_put(pio0, sm, pin_mask);
-    pio_sm_put(pio0, sm, ssm_ms(base + 1600));
-    pio_sm_put(pio0, sm, 0);
+#define send(t, v)\
+    printf("    sending: 0x%08x @ %d (%u)\n", v, t, ssm_ms(t)); \
+    pio_sm_put(pio0, sm, ssm_ms(t)); \
+    pio_sm_put(pio0, sm, pin_mask); \
+
+    send(base + 400, pin_mask);
+    send(base + 800, 0);
+    send(base + 1200, pin_mask);
+    send(base + 1600, 0);
 
     printf("Completed epoch...\n");
 
