@@ -216,8 +216,13 @@ hold:
  * - configure the GPIO pin to be driven by this PIO device (using pio_gpio_init())
  * - set the pin direction to output (using pio_sm_set_pindirs_with_mask())
  *
+ * This helper function also configures the state machine's FIFO to be
+ *
  * The caller is still responsible for starting the state machine using
  * pio_set_enabled() or pio_set_sm_mask_enabled().
+ *
+ * FIFO protocol: (target_time ; gpio_out)
+ *               ---------- time -------->
  *
  * \param pio           The PIO instance; either \ref pio0 or \ref pio1
  * \param pin_mask      Mask of GPIO pins to be used for output
@@ -237,6 +242,8 @@ static inline int ssm_output_program_init(PIO pio, uint32_t pin_mask) {
 
     // Obtain default PIO configuration
     pio_sm_config c = ssm_output_program_get_default_config(offset);
+
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
     // We're addressing GPIO pins in a 0-indexed fashion
     sm_config_set_out_pins(&c, 0, 32);
