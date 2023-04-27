@@ -7,6 +7,7 @@ target_sources(ssm_output_test
 target_link_libraries(ssm_output_test
     pico_stdlib
     hardware_pio
+    hardware_clocks
     ssm-pio-header
 )
 
