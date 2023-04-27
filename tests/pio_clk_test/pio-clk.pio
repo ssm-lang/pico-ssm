@@ -1,0 +1,37 @@
+; Just toggle a GPIO pin up and down, to establish clock rate
+.program pio_clk
+.side_set 1
+.wrap_target
+    nop side 1
+    nop side 0
+.wrap
+
+% c-sdk {
+static inline int pio_clk_program_init(PIO pio, uint pin) {
+    if (!pio_can_add_program(pio, &pio_clk_program))
+        // Can't add program
+        return -1;
+
+    uint offset = pio_add_program(pio, &pio_clk_program);
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No state machines available at pio
+        return -1;
+
+    // Obtain default PIO configuration
+    pio_sm_config c = pio_clk_program_get_default_config(offset);
+
+    // Run with no clock divider, i.e., at full speed
+    sm_config_set_clkdiv_int_frac(&c, 1, 0);
+
+    sm_config_set_sideset_pins(&c, pin);
+    pio_gpio_init(pio, pin);
+    pio_sm_set_pindirs_with_mask(pio, sm, 1 << pin, 1 << pin);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+%}
