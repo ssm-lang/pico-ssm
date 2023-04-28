@@ -3,7 +3,7 @@
 #include <hardware/clocks.h>
 #include <pico/stdlib.h>
 
-#include "pio-clk.pio.h"
+#include "mypio.pio.h"
 
 #ifndef PICO_DEFAULT_LED_PIN
 #error This program requires a board with a regular LED
