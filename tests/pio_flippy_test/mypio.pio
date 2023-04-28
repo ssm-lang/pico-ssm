@@ -1,9 +1,19 @@
 ; Just toggle a GPIO pin up and down, to establish clock rate
 .program mypio
-.side_set 1
+.side_set 2
+    set x, 0        side 0b00
 .wrap_target
-    nop side 0b1
-    nop side 0b0
+flippy:
+    nop             side 0b01
+flip:
+    jmp x--, flippy side 0b11
+    jmp flop        side 0b01
+
+floppy:
+    nop             side 0b00
+flop:
+    jmp x--, floppy side 0b10
+    jmp flip        side 0b00
 .wrap
 
 % c-sdk {
@@ -26,8 +36,10 @@ static inline int mypio_program_init(PIO pio, uint pin) {
     sm_config_set_clkdiv_int_frac(&c, 1, 0);
 
     sm_config_set_sideset_pins(&c, pin);
+    sm_config_set_sideset_pins(&c, pin + 1);
     pio_gpio_init(pio, pin);
-    pio_sm_set_pindirs_with_mask(pio, sm, 1 << pin, 1 << pin);
+    pio_gpio_init(pio, pin + 1);
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, 1 << pin | 1 << (pin + 1));
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
