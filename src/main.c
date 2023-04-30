@@ -5,7 +5,6 @@
 #include <pico/stdlib.h>
 
 #include "hardware/sync.h"
-#include "ssm.pio.h"
 #include "pico/time.h"
 #include "pico/types.h"
 
