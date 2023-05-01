@@ -1,122 +1,95 @@
-; Output program
-;
-; Between loops:
-; - X holds the counter (decremented every 4 instructions)
-; - Y holds the target time
-;
-; This program consists of two loops: the poll loop and the hold loop. Each loop
-; always consists of exactly four instructions, and decrements X exactly once
-; each loop iteration.
-;
-; The poll loop polls for packets from the user, containing the target time.
-; If no packet is present, pull noblock will load OSR with the contents of
-; register X (holding the counter), so if X and OSR are equal, then no packet is
-; received. The target time MUST be less than 2^32-1 away from the current
-; counter value in order to be considered (but then again this is necessary
-; anyway to account for wraparound).
-;
-; The hold loop waits for the counter to reach the target time. There are
-; a bunch of nops to ensure that the counter is always decremented at the same
-; rate. When the target time is reached, the GPIO output is read from the FIFO
-; and written to the pins.
-;
-; FIFO protocol: (target_time ; gpio_out)
-;                ---------- time -------->
-;
-; NOTE: the CPU MUST:
-;   - write target times in decreasing (chronologically increasing) order
-;   - write target_time less than 2^32-1 away from the current counter
-;   - write target_time more than 2 away from the current counter
-;   - write target_time more than 2 away from the previous target_time
-;   - always write two consecutive packets, target_time and gpio_out
-;   - write the gpio_out the FIFO before target_time expires
-;
-; TODO: consider this:
-;
-; If the CPU cannot guarantee to write gpio_out before target_time expires,
-; there is an alternate implementation that leverages another separate state
-; machine to specifically handle GPIO outputs. This also has the following
-; advantages and disadvantages:
-;
-;   - doubles the effective size of the FIFO
-;   - guarantees not to reinterpret target time as GPIO output, so output won't
-;     be totally corrupted due to unexpected CPU stalling
-;   - halves the number of state machines available (if we care about this)
-;
-; It's not that much more complicated; this ssm_output program can be easily
-; adapted to support that.
-;
-.program ssm_output
-    set x, 0                ; X <- 0
+; Internal IRQ number used to communicate between PIO state machines
+.define PUBLIC SSM_OUT_SET_IRQ 4
+
+; Interruptible output counter (8 cycles per tick)
+.program ssm_output_ctr
+    set y, 0                    ; Initialize counter to 0
+                                ; Let block spill into resume block
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
+continue:
+    jmp resume                  ; Goto decrement wraparound
+
+; Regs:
+;   X: target value
+;   Y: new target value (read from OSR)
+;   OSR: _ (also holds new target value)
+;   ISR: current counter (stashed from Y)
+new_target:
+    mov x, y                    ; Set new target value
+    mov y, isr                  ; Restore counter to Y
+    jmp resume                  ; Goto decrement/wraparound
+
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
 .wrap_target
-poll:
-    pull noblock            ; OSR <- FIFO else X
-    mov y, osr              ; Y <- OSR  (load for comparison)
-    jmp x!=y, hold_new      ; X != Y    (new packet received)
-    jmp x--, poll           ; X--       (no packet received)
-    pull noblock            ; spillover (no jump when X is zero)
-    mov y, osr              ; Y <- OSR  (load for comparison)
-    jmp x!=y, hold_new      ; X != Y    (new packet received)
-    jmp x--, poll           ; X--       (no packet received)
-hold_stall:
-    nop                     ; Need to stall 3 more cycles before next hold loop
-    nop                     ; iteration to align 4-instruction cycle
-hold_new:
-    jmp x--, hold           ; X--, enter hold loop
-hold:
-    jmp x!=y, hold_stall    ; X != Y (target time not reached)
-    pull noblock            ; OSR <- FIFO else X (which would be garbage)
-    out pins, 32            ; Write output to GPIO pins
-    jmp x--, poll           ; X--, return to poll loop
+wait_ctr:
+    pull noblock                ; OSR <- FIFO else X
+    mov isr, y                  ; Back up counter to ISR
+    mov y, osr                  ; Store pulled value to Y for comparison
+    jmp x!=y,new_target         ; Jump if new target was written to FIFO
+    mov y, isr                  ; Restore counter to Y
+    jmp x!=y, continue          ; Jump if counter not yet reached
+    irq nowait SSM_OUT_SET_IRQ  ; Interrupt ssm_output_out
+resume:
+    jmp y--, wait_ctr
 .wrap
 
 % c-sdk {
-/*! \brief Initialize ssm_output on a state machine for a particular PIO device.
- *
- * This program will allocate the state machine used to execute this program,
- * and determine the offset at where the ssm_output program will be loaded. It
- * then performs some initialization and loads that program.
- *
- * This helper function takes a GPIO \a pin_mask, where each bit indicates
- * whether that GPIO index should be used for output. According to that bitmask,
- * this helper will:
- *
- * - configure the GPIO pin to be driven by this PIO device (using pio_gpio_init())
- * - set the pin direction to output (using pio_sm_set_pindirs_with_mask())
- *
- * This helper function also configures the state machine's FIFO to be
- *
- * The caller is still responsible for starting the state machine using
- * pio_set_enabled() or pio_set_sm_mask_enabled().
- *
- * FIFO protocol: (target_time ; gpio_out)
- *               ---------- time -------->
- *
- * \param pio           The PIO instance; either \ref pio0 or \ref pio1
- * \param pin_mask      Mask of GPIO pins to be used for output
- * \return              State machine where program is installed; negative if error
- */
-static inline int ssm_output_program_init(PIO pio, uint32_t pin_mask) {
-    if (!pio_can_add_program(pio, &ssm_output_program))
-        // Can't add program
+static inline int ssm_outout_ctr_init(PIO pio) {
+    if (!pio_can_add_program(pio, &ssm_output_ctr_program))
+        // No available space for program
         return -1;
-
-    uint offset = pio_add_program(pio, &ssm_output_program);
 
     int sm = pio_claim_unused_sm(pio, false);
     if (sm < 0)
-        // No state machines available at pio
+        // No available state machines to execute program
         return -1;
 
-    // Obtain default PIO configuration
-    pio_sm_config c = ssm_output_program_get_default_config(offset);
+    uint offset = pio_add_program(pio, &ssm_output_ctr_program);
 
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    pio_sm_config c = ssm_output_ctr_program_get_default_config(offset);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+%}
+
+; Latching output emitter (interrupt-driven)
+.program ssm_output_out
+    in pins, 32
+    mov osr, isr                ; Initialize OSR to current GPIO state
+.wrap_target
+    wait 1 irq SSM_OUT_SET_IRQ  ; Wait for interrupt from ssm_output_ctr
+    out pins, 32                ; GPIO pins <- OSR
+.wrap
+
+% c-sdk {
+static inline int ssm_output_out_init(PIO pio, uint32_t pin_mask) {
+    if (!pio_can_add_program(pio, &ssm_output_out_program))
+        // No available space for program
+        return -1;
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No available state machines to execute program
+        return -1;
+
+    uint offset = pio_add_program(pio, &ssm_output_out_program);
+
+    pio_sm_config c = ssm_output_out_program_get_default_config(offset);
 
     // We're addressing GPIO pins in a 0-indexed fashion
     sm_config_set_out_pins(&c, 0, 32);
 
-    // Configure the pins we're using for output to be driven by this PIO device
+    // Configure output pins to be driven by PIO device
     for (int pin_idx = 0; pin_idx < 32; pin_idx++)
         if ((0x1 << pin_idx) & pin_mask)
             pio_gpio_init(pio, pin_idx);

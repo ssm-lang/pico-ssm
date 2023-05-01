@@ -33,6 +33,7 @@ int main(void) {
   // Test with one pin first
   uint32_t pin_mask = 1u << PICO_DEFAULT_LED_PIN;
 
+#if 0
   int sm = ssm_output_program_init(pio0, pin_mask);
   if (sm < 0) {
     printf("Error! ssm_output_program_init() returned a neg: %d\n", sm);
@@ -74,6 +75,7 @@ int main(void) {
 
     sleep_us(epoch * 1000 - delta);
   }
+#endif
 
   return 0;
 }
