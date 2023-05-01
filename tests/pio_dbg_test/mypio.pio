@@ -1,0 +1,53 @@
+; Just toggle a GPIO pin up and down, to establish clock rate
+.define PUBLIC MYPIO_CLK_DIVIDER 64
+.define PUBLIC MYPIO_SIDESET_PINS 5
+
+.program mypio
+.side_set MYPIO_SIDESET_PINS
+.wrap_target
+start1:
+    set x, 8            side 0b10001
+loop1:
+    nop                 side 0b01001
+    jmp x--, loop1      side 0b00101
+
+    set x, 8            side 0b10011
+loop2:
+    nop                 side 0b01011
+    jmp x--, loop2      side 0b00111
+.wrap
+
+% c-sdk {
+static inline int mypio_program_init(PIO pio, uint pin_base) {
+    if (!pio_can_add_program(pio, &mypio_program))
+        // Can't add program
+        return -1;
+
+    uint offset = pio_add_program(pio, &mypio_program);
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No state machines available at pio
+        return -1;
+
+    // Obtain default PIO configuration
+    pio_sm_config c = mypio_program_get_default_config(offset);
+
+    // Run with no clock divider, i.e., at full speed
+    sm_config_set_clkdiv_int_frac(&c, MYPIO_CLK_DIVIDER, 0);
+
+    sm_config_set_sideset_pins(&c, pin_base);
+
+    sm_config_set_sideset(&c, MYPIO_SIDESET_PINS, false, false);
+
+    for (int i = 0; i < MYPIO_SIDESET_PINS; i++)
+        pio_gpio_init(pio, pin_base + i);
+
+    pio_sm_set_pindirs_with_mask(pio, sm, 0x1f << pin_base, 0x1f << pin_base);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+%}
