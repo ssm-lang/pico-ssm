@@ -8,6 +8,7 @@
 add_library(ssm-pio-header INTERFACE)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-input.pio)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
+pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-timer.pio)
 
 add_library(ssm-pio INTERFACE)
 target_link_libraries(ssm-pio
