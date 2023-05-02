@@ -23,8 +23,5 @@ assume the drift due to printing can be ignored...
     The drift grows very quickly if the CPU is stalled by printing text to UART
     (approx. 100K counts!). However, the drift seems to grow at a steady rate.
 
-Questions:
-
--   It didn't seem like I needed to turn off optimizations to force the
-    C program to read from the same register 4 times. Why? (Maybe this is
-    something to do with the semantics of `static inline` functions?)
+-   PIO device registers are declared as `volatile uint32_t`, so volatile reads
+    are not optimized away by the compiler, as we would hope.
