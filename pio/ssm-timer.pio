@@ -42,23 +42,23 @@ static inline int ssm_pio_timer_program_start(PIO pio) {
     return sm;
 }
 static inline uint32_t ssm_pio_timer_read(PIO pio, uint sm) {
-
-    // TODO: how ensure all 4 reads happen (i.e., turn off optimizations), but
-    // that they are not written back to memory (i.e., only read into a register)?
-
     /*
-    static volatile uint32_t x = 0;
-    x = pio_sm_get(pio, sm);
-    x = pio_sm_get(pio, sm);
-    x = pio_sm_get(pio, sm);
-    x = pio_sm_get(pio, sm);
-    x = pio_sm_get_blocking(pio, sm);
-    return x;
+    volatile uint32_t *rxf = &pio->rxf[sm];
+    (void) *rxf;
+    (void) *rxf;
+    (void) *rxf;
+    (void) *rxf;
     */
+
+    // This should reliably generate 4 reads, since the pio->rxf field is indeed
+    // declared a volatile uint32_t.
     pio_sm_get(pio, sm);
     pio_sm_get(pio, sm);
     pio_sm_get(pio, sm);
     pio_sm_get(pio, sm);
+
+    // Should we clear RXUNDER flag in fdebug here? There's no need to.
+
     return pio_sm_get_blocking(pio, sm);
 }
 %}
