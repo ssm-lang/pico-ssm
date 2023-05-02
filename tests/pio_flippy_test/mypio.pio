@@ -17,7 +17,12 @@ flop:
 .wrap
 
 % c-sdk {
-static inline int mypio_program_init(PIO pio, uint pin) {
+
+#ifndef PICO_DEFAULT_LED_PIN
+#error This program requires a board with a regular LED
+#endif
+
+static inline int mypio_program_init(PIO pio) {
     if (!pio_can_add_program(pio, &mypio_program))
         // Can't add program
         return -1;
@@ -35,11 +40,15 @@ static inline int mypio_program_init(PIO pio, uint pin) {
     // Run with no clock divider, i.e., at full speed
     sm_config_set_clkdiv_int_frac(&c, 1, 0);
 
-    sm_config_set_sideset_pins(&c, pin);
-    sm_config_set_sideset_pins(&c, pin + 1);
-    pio_gpio_init(pio, pin);
-    pio_gpio_init(pio, pin + 1);
-    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, 1 << pin | 1 << (pin + 1));
+    // NOTE: PICO_DEFAULT_LED_PIN is 25
+    // so this program will toggle 25 and 26
+    sm_config_set_sideset_pins(&c, PICO_DEFAULT_LED_PIN);
+    sm_config_set_sideset(&c, 2, false, false);
+
+    pio_gpio_init(pio, PICO_DEFAULT_LED_PIN);
+    pio_gpio_init(pio, PICO_DEFAULT_LED_PIN + 1);
+
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, ((1u << 2) - 1) << PICO_DEFAULT_LED_PIN);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
