@@ -102,4 +102,10 @@ static inline int ssm_output_out_init(PIO pio, uint32_t pin_mask) {
 
     return sm;
 }
+
+static inline void ssm_output_put(PIO pio, uint sm, uint32_t value) {
+    pio_sm_put(pio, sm, value);
+    __compiler_memory_barrier();
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true));
+}
 %}
