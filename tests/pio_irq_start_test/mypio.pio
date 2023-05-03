@@ -1,0 +1,48 @@
+.define PUBLIC CPU_TO_MYPIO1_IRQ 5
+.define PUBLIC MYPIO1_TO_MYPIO2_IRQ 4
+
+.program mypio
+wait 1 irq CPU_TO_MYPIO1_IRQ
+.wrap_target
+    set pins, 1
+    set pins, 0
+    set pins, 1
+    set pins, 0
+.wrap
+
+% c-sdk {
+// With a clock divider of 4096, these state machines should execute at a rate
+// of 1 instruction per (4096 / 125MHz) = 32.768us.
+/* #define MYCLKDIV 4096 */
+
+// With a clock divider of 8192, these state machines should execute at a rate
+// of 1 instruction per (8192 / 125MHz) = 65.536us.
+#define MYCLKDIV 8192
+static inline void mypio_init(PIO pio, uint pin1, uint pin2) {
+    uint offset1 = pio_add_program(pio, &mypio_program);
+    int sm1 = pio_claim_unused_sm(pio, false);
+    pio_sm_config c1 = mypio_program_get_default_config(offset1);
+
+    sm_config_set_clkdiv_int_frac(&c1, MYCLKDIV, 0);
+
+    sm_config_set_set_pins(&c1, pin1, 1);
+    pio_gpio_init(pio, pin1);
+    pio_sm_set_pindirs_with_mask(pio, sm1, 1 << pin1, 1 << pin1);
+
+    pio_sm_init(pio, sm1, offset1, &c1);
+
+    uint offset2 = pio_add_program(pio, &mypio_program);
+    int sm2 = pio_claim_unused_sm(pio, false);
+    pio_sm_config c2 = mypio_program_get_default_config(offset2);
+
+    sm_config_set_clkdiv_int_frac(&c2, MYCLKDIV, 0);
+
+    sm_config_set_set_pins(&c2, pin2, 1);
+    pio_gpio_init(pio, pin2);
+    pio_sm_set_pindirs_with_mask(pio, sm2, 1 << pin2, 1 << pin2);
+
+    pio_sm_init(pio, sm2, offset2, &c2);
+
+    pio_set_sm_mask_enabled(pio, (1 << sm1) | (1 << sm2), true);
+}
+%}
