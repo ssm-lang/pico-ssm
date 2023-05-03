@@ -42,7 +42,7 @@ resume:
 .wrap
 
 % c-sdk {
-static inline int ssm_outout_ctr_init(PIO pio) {
+static inline int ssm_output_ctr_init(PIO pio) {
     if (!pio_can_add_program(pio, &ssm_output_ctr_program))
         // No available space for program
         return -1;
@@ -104,8 +104,8 @@ static inline int ssm_output_out_init(PIO pio, uint32_t pin_mask) {
 }
 
 static inline void ssm_output_put(PIO pio, uint sm, uint32_t value) {
-    pio_sm_put(pio, sm, value);
+    pio_sm_put(pio, sm, value);  // put value into TX FIFO
     __compiler_memory_barrier();
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true));
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // execute pull block, i.e., OSR <- TX FIFO
 }
 %}
