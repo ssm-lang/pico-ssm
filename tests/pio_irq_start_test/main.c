@@ -27,7 +27,7 @@ int main(void) {
 
   sleep_ms(500);
 
-  printf("\n\n=== pio_irq_test ===\n");
+  printf("\n\n=== pio_irq_start_test ===\n");
 
   clk_sys_hz = clock_get_hz(clk_sys);
 
@@ -40,16 +40,9 @@ int main(void) {
 
   printf("Enabled state machines\n");
 
-  while (true) {
-    printf("-------------------\nBeginning round\n");
+  force_irq(pio0);
 
-    printf("Current GPIO situation: %08x\n", read_gpio());
+  printf("Bye bye\n");
 
-    force_irq(pio0);
-    printf("Forced IRQ\n\n");
-
-    printf("Sleeping for a few seconds before next round...\n\n");
-    sleep_ms(1000);
-  }
   return 0;
 }
