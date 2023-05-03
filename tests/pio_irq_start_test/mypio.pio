@@ -2,14 +2,14 @@
 .define PUBLIC CPU_TO_MYPIO_IRQ_2 6
 
 .program mypio_1
-wait 1 irq CPU_TO_MYPIO1_IRQ_1
+wait 1 irq CPU_TO_MYPIO_IRQ_1
 .wrap_target
     set pins, 1
     set pins, 0
 .wrap
 
 .program mypio_2
-wait 1 irq CPU_TO_MYPIO1_IRQ_2
+wait 1 irq CPU_TO_MYPIO_IRQ_2
 .wrap_target
     set pins, 1
     set pins, 0
