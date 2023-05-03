@@ -1,0 +1,67 @@
+; Just toggle a GPIO pin up and down, to establish clock rate
+.program mypio
+.side_set 1
+.wrap_target
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+    set pins, 1 side 0b1
+
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+    set pins, 0 side 0b0
+.wrap
+
+% c-sdk {
+#define MYCLKDIV 4096
+static inline void mypio_program_init(PIO pio, uint pin1, uint pin2) {
+    // We'll have both state machines running from the same program, which will
+    // be loaded at the same offset.
+    uint offset = pio_add_program(pio, &mypio_program);
+
+    // NOTE: swapping these two will swap the state machine number allocated by
+    // pio_claim_unused_sm()!
+    int sm2 = pio_claim_unused_sm(pio, false);
+    int sm1 = pio_claim_unused_sm(pio, false);
+
+    pio_sm_config c1 = mypio_program_get_default_config(offset);
+    pio_sm_config c2 = mypio_program_get_default_config(offset);
+
+    sm_config_set_clkdiv_int_frac(&c1, MYCLKDIV, 0);
+
+    sm_config_set_sideset_pins(&c1, pin1);
+    sm_config_set_sideset(&c1, 1, false, false);
+    sm_config_set_set_pins(&c1, pin1 + 1, 1);
+
+    pio_gpio_init(pio, pin1);
+    pio_gpio_init(pio, pin1 + 1);
+    pio_sm_set_pindirs_with_mask(pio, sm1, 3 << pin1, 3 << pin1);
+
+    pio_sm_init(pio, sm1, offset, &c1);
+
+    sm_config_set_clkdiv_int_frac(&c2, MYCLKDIV, 0);
+
+    sm_config_set_sideset_pins(&c2, pin2);
+    sm_config_set_sideset(&c2, 1, false, false);
+    sm_config_set_set_pins(&c2, pin2 + 1, 1);
+
+    pio_gpio_init(pio, pin2);
+    pio_gpio_init(pio, pin2 + 1);
+    pio_sm_set_pindirs_with_mask(pio, sm2, 3 << pin2, 3 << pin2);
+
+    pio_sm_init(pio, sm2, offset, &c2);
+
+    pio_set_sm_mask_enabled(pio, (1 << sm1) | (1 << sm2), true);
+}
+%}
