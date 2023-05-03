@@ -19,7 +19,7 @@ uint32_t read_gpio(void) {
 }
 
 void force_irq(PIO pio) {
-  pio->irq_force = 1 << CPU_TO_MYPIO1_IRQ;
+  pio->irq_force = (1 << CPU_TO_MYPIO_IRQ_1) | (1 << CPU_TO_MYPIO_IRQ_2);
 }
 
 int main(void) {
@@ -40,16 +40,10 @@ int main(void) {
 
   printf("Enabled state machines\n");
 
-  while (true) {
-    printf("-------------------\nBeginning round\n");
+  printf("Current GPIO situation: %08x\n", read_gpio());
 
-    printf("Current GPIO situation: %08x\n", read_gpio());
+  force_irq(pio0);
+  printf("Forced IRQ\n\n");
 
-    force_irq(pio0);
-    printf("Forced IRQ\n\n");
-
-    printf("Sleeping for a few seconds before next round...\n\n");
-    sleep_ms(1000);
-  }
   return 0;
 }
