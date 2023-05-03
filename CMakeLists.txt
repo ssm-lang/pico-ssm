@@ -23,3 +23,6 @@ add_subdirectory(tests)
 
 # Where our main application
 add_subdirectory(src)
+
+# A test program to build
+add_subdirectory(serial-blink)
