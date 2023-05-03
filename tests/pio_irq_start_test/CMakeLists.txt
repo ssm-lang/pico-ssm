@@ -1,4 +1,4 @@
-set(test_name pio_irq_test)
+set(test_name pio_irq_start_test)
 
 add_executable(${test_name})
 

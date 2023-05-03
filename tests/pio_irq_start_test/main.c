@@ -27,7 +27,7 @@ int main(void) {
 
   sleep_ms(500);
 
-  printf("\n\n=== pio_irq_test ===\n");
+  printf("\n\n=== pio_irq_start_test ===\n");
 
   clk_sys_hz = clock_get_hz(clk_sys);
 
