@@ -77,13 +77,10 @@ void ssm_throw(ssm_error_t reason, const char *file, int line, const char *func)
 semaphore_t ssm_tick_sem;
 
 static void timer_isr(void) {
+  // Compulsory: clear the interrupt
   hw_clear_bits(&timer_hw->intr, 1u << ALARM_NUM);
-  printf(".\n");
   sem_release(&ssm_tick_sem);
 }
-
-/* FIXME: The isr is running, but it's not doing the thing with the
-   semapore properly */
 
 /******************************
  * Low-level 64-bit timer access
@@ -109,41 +106,46 @@ ssm_time_t get_time(void) {
  */
 void set_alarm(ssm_time_t when)
 {
+  timer_hw->alarm[ALARM_NUM] = (uint32_t) when;
+}
+
+/*
+ * Initialize our alarm
+ */
+void initialize_alarm()
+{
+  hardware_alarm_claim(ALARM_NUM);
+  
   hw_set_bits(&timer_hw->inte, 1u << ALARM_NUM);
   irq_set_exclusive_handler(ALARM_IRQ, timer_isr);
   irq_set_enabled(ALARM_IRQ, true);
-  timer_hw->alarm[ALARM_NUM] = (uint32_t) when;
+  set_alarm((ssm_time_t) ~0);   // Far enough in the future to be irrelevant
 }
 
 
 int ssm_platform_entry(void) {
 
-  printf("ssm_platform_entry()\n");
+  // printf("ssmp_latform_entry()\n");
 
-  hardware_alarm_claim(ALARM_NUM);
-  //  hardware_alarm_set_callback(alarm_num, timer_isr);
+  // Initialize the semaphore
+  sem_init(&ssm_tick_sem, 0, 1);
 
-  //  hardware_alarm_set_target(alarm_num,
-  //			    delayed_by_us(get_absolute_time(),
-  //					  (uint64_t) 100)); /* Nonsense time */
-
+  // Configure our alarm
+  initialize_alarm();
   
   ssm_mem_init(&alloc_page, &alloc_mem, &free_mem);
 
-
-  /* Prepare the sslang program to start */
-  
+  // Prepare the sslang program to start
   extern ssm_act_t *__enter_main(ssm_act_t *, ssm_priority_t, ssm_depth_t,
                                  ssm_value_t *, ssm_value_t *);
   ssm_value_t nothing0 = ssm_new_sv(ssm_marshal(0));
   ssm_value_t nothing1 = ssm_new_sv(ssm_marshal(0));
   ssm_value_t main_argv[2] = {nothing0, nothing1};
-
-  /* Start up main routine */
+  
   ssm_activate(__enter_main(&ssm_top_parent, SSM_ROOT_PRIORITY, SSM_ROOT_DEPTH,
                             main_argv, NULL));
 
-  /* Run the program for time zero */
+  // Run the program for time zero
   ssm_tick();
 
   for (;;) {
@@ -156,36 +158,18 @@ int ssm_platform_entry(void) {
 
     __compiler_memory_barrier();
 
-    if (next_time <= wall_time) {
+    if (next_time <= wall_time)
       ssm_tick();
-    } else {
-      if (next_time == SSM_NEVER) {
-        // Nothing to do; sleep indefinitely
-
-        // Consider terminating "properly" at this point if there are no more
-        // active processes, i.e., the program has terminated. This code is not
-        // well-tested, so for now, when the program terminates, we send the
-        // pico into endless slumber.
-        //
-        // if (!ssm_active())
-        //   break;
-
-        sem_acquire_blocking(&ssm_tick_sem);
-      } else {
-	printf("delaying to %llu\n", next_time);
+    else if (next_time == SSM_NEVER)
+      sem_acquire_blocking(&ssm_tick_sem);
+    else {
 	set_alarm(next_time);
-
-	printf("wall %llu\n", get_time());
 	
-	// sem_acquire_blocking(&ssm_tick_sem);
-	sem_acquire_block_until(&ssm_tick_sem, delayed_by_us(get_absolute_time(), 10000000));
-
-	printf("unblocked at wall %llu\n", get_time());
-
+	sem_acquire_blocking(&ssm_tick_sem);
 	
         sem_reset(&ssm_tick_sem, 0);
-      }
     }
+    
   }
   
   return 0;
