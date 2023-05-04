@@ -15,7 +15,7 @@ int main(void) {
 
   printf("Serial blink 1 example\n");
 
-   ssm_platform_entry();
+  ssm_platform_entry();
 
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);

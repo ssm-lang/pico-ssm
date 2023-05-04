@@ -8,5 +8,14 @@ void printInt(ssm_value_t v)
 $$$
 
 main a b =
-  $printInt(42)
+  let timer = new ()
+  let count = new 0
+  after 3000000, timer <- ()
+  wait timer
+  $printInt(deref count)
+  loop
+    after 1000000, timer <- ()
+    wait timer
+    $printInt(deref count)
+    count <- deref count + 1
   
