@@ -1,0 +1,12 @@
+$$$
+#include <stdio.h>
+
+void printInt(ssm_value_t v)
+{
+  printf("%d\n", ssm_unmarshal(v));  
+}
+$$$
+
+main a b =
+  $printInt(42)
+  
