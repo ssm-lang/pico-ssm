@@ -9,8 +9,8 @@
 #include "mypio.pio.h"
 #include "ssm-output.pio.h"
 
-// #define CLK_MHZ 125
-#define CLK_MHZ 1
+#define CLK_MHZ 125
+// #define CLK_MHZ 1
 
 uint32_t clk_sys_hz = 125000000; // Default is (usually) 125MHz (?)
 
