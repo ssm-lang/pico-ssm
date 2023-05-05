@@ -7,6 +7,8 @@
 ; From the CPU's perspective, the FIFO is normally filled with 4 stale values,
 ; so to read a fresh (recent) counter value, the CPU need only read the FIFO
 ; register 5 times.
+;
+; TODO: use ssm-ctr.h
 .program ssm_pio_timer
 .wrap_target
     jmp x--, next [5]
@@ -41,6 +43,8 @@ static inline int ssm_pio_timer_program_start(PIO pio) {
 
     return sm;
 }
+
+// TODO: return ticks value, defined in ssm-ctr.h.
 static inline uint32_t ssm_pio_timer_read(PIO pio, uint sm) {
     /*
     volatile uint32_t *rxf = &pio->rxf[sm];

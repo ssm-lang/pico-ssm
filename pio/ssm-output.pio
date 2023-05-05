@@ -3,15 +3,17 @@
 
 ; Interruptible output counter (8 cycles per tick)
 .program ssm_output_ctr
-    set y, 0                    ; Initialize counter to 0
-                                ; Let block spill into resume block
+; .side_set 4
+    pull noblock                ; side 0b1110   ; Pull initial counter from FIFO
+    mov y, osr                  ; side 0b1101   ; Initialize counter variable
+                                                ; Let block spill into resume block
 ; Regs:
 ;   X: target value
 ;   Y: current counter
 ;   OSR: _ (clobbered when pulling from FIFO)
 ;   ISR: _ (used to temporarily stash Y)
 continue:
-    jmp resume                  ; Goto decrement wraparound
+    jmp resume                  ; side 0b0010   ; Goto decrement wraparound
 
 ; Regs:
 ;   X: target value
@@ -19,9 +21,9 @@ continue:
 ;   OSR: _ (also holds new target value)
 ;   ISR: current counter (stashed from Y)
 new_target:
-    mov x, y                    ; Set new target value
-    mov y, isr                  ; Restore counter to Y
-    jmp resume                  ; Goto decrement/wraparound
+    mov x, y                    ; side 0b0100   ; Set new target value
+    mov y, isr                  ; side 0b0100   ; Restore counter to Y
+    jmp resume                  ; side 0b0100   ; Goto decrement/wraparound
 
 ; Regs:
 ;   X: target value
@@ -30,15 +32,15 @@ new_target:
 ;   ISR: _ (used to temporarily stash Y)
 .wrap_target
 wait_ctr:
-    pull noblock                ; OSR <- FIFO else X
-    mov isr, y                  ; Back up counter to ISR
-    mov y, osr                  ; Store pulled value to Y for comparison
-    jmp x!=y,new_target         ; Jump if new target was written to FIFO
-    mov y, isr                  ; Restore counter to Y
-    jmp x!=y, continue          ; Jump if counter not yet reached
-    irq nowait SSM_OUT_SET_IRQ  ; Interrupt ssm_output_out
+    pull noblock                ; side 0b0000   ; OSR <- FIFO else X
+    mov isr, y                  ; side 0b0000   ; Back up counter to ISR
+    mov y, osr                  ; side 0b0000   ; Store pulled value to Y for comparison
+    jmp x!=y,new_target         ; side 0b0000   ; Jump if new target was written to FIFO
+    mov y, isr                  ; side 0b0000   ; Restore counter to Y
+    jmp x!=y, continue          ; side 0b0000   ; Jump if counter not yet reached
+    irq nowait SSM_OUT_SET_IRQ  ; side 0b1000   ; Interrupt ssm_output_out
 resume:
-    jmp y--, wait_ctr
+    jmp y--, wait_ctr           ; side 0b0000
 .wrap
 
 % c-sdk {
@@ -56,9 +58,26 @@ static inline int ssm_output_ctr_init(PIO pio) {
 
     pio_sm_config c = ssm_output_ctr_program_get_default_config(offset);
 
+/*
+    // For debugging
+    sm_config_set_sideset_pins(&c, 6);
+    sm_config_set_sideset(&c, 4, false, false);
+    pio_gpio_init(pio, 6);
+    pio_gpio_init(pio, 7);
+    pio_gpio_init(pio, 8);
+    pio_gpio_init(pio, 9);
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xf << 6, 0xf << 6);
+    // Slow down for logic analyzer
+    sm_config_set_clkdiv_int_frac(&c, 125, 0);
+*/
+
     pio_sm_init(pio, sm, offset, &c);
 
     return sm;
+}
+
+static inline void ssm_output_set_ctr(PIO pio, uint sm, uint32_t ctr) {
+    pio_sm_put(pio, sm, ctr);
 }
 %}
 
