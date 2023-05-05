@@ -118,23 +118,24 @@ int main(void) {
   mysleep_until(time_us += 1000000);
 
   int death = -1;
+  int iter = 0;
 
+  // Wake up every 1ms
   while (true) {
-    // Wake up every 1ms
-    uint32_t  wake_up_us = time_us + 5000u,
-              wake_up_8us = wake_up_us / 8,
-              wake_up_ctr = ~(wake_up_8us * CLK_MHZ),
-              wake_up_ticks = wake_up_us * CLK_MHZ;
-              // wake_up_ctr = ticks_to_ctr(wake_up_ticks);
 
-    ssm_output_set_ctr(pio0, sm_ctr, wake_up_ctr);
-    printf("\nIteration for time %u\n", time_us);
-    printf("\tWake up (us): %u\n", wake_up_us);
-    printf("\tWake up (ticks): %u\n", wake_up_ticks);
-    printf("\tWake up (8us): %u\n", wake_up_8us);
-    printf("\tWake up (ctr): %u\n", wake_up_ctr);
+    uint64_t  wake_up_us = time_us + 500u,
+              wake_up_ticks = wake_up_us * CLK_MHZ,
+              wake_up_ctr = ~(wake_up_ticks / 8);
 
     uint8_t gpio_before = gpio_get(PIN);
+    ssm_output_set_ctr(pio0, sm_ctr, (uint32_t) wake_up_ctr);
+
+    printf("\nIteration %d for time %u\n", iter++, time_us);
+    printf("\tWake up (us): %llu\n", wake_up_us);
+    printf("\tWake up (ticks): %llu\n", wake_up_ticks);
+    printf("\tWake up (ctr): %llu\n", wake_up_ctr);
+    printf("\tWake up (32-bit ctr): %u\n", (uint32_t) wake_up_ctr);
+
     if (gpio_before)
       printf("\tCurrent GPIO (start of iteration): 1\n");
     else
@@ -145,9 +146,9 @@ int main(void) {
     uint8_t gpio_mid = gpio_get(PIN);
 
     if (gpio_mid)
-      printf("\tCurrent GPIO (start of iteration): 1\n");
+      printf("\tCurrent GPIO (mid-iteration): 1\n");
     else
-      printf("\tCurrent GPIO (start of iteration): 0\n");
+      printf("\tCurrent GPIO (mid-iteration): 0\n");
 
     if (gpio_mid == gpio_before) {
       printf("!!!!!!! ERROR: gpio pin did not change after setting counter !!!!!!!\n");
