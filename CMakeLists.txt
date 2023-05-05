@@ -24,6 +24,7 @@ add_subdirectory(tests)
 # Where our main application
 add_subdirectory(src)
 
-# Test programs
+# Various experimental programs
 add_subdirectory(serial-blink0)
 add_subdirectory(serial-blink1)
+add_subdirectory(serial-blink2)

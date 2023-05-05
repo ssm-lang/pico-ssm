@@ -1,0 +1,5 @@
+main a gpio =
+  loop
+    after 100000, gpio <- 16384 - deref gpio
+    wait gpio
+  
