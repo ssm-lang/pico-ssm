@@ -1,5 +1,19 @@
 $$$
 #include <stdio.h>
+#include "pico/stdlib.h"
+
+#define LED_PIN 14
+
+void init_gpio()
+{
+  gpio_init(LED_PIN);
+  gpio_set_dir(LED_PIN, GPIO_OUT);
+}
+
+void set_led(ssm_value_t v)
+{
+  gpio_put(LED_PIN, ssm_unmarshal(v) & 0x1);
+}
 
 void printInt(ssm_value_t v)
 {
@@ -8,12 +22,12 @@ void printInt(ssm_value_t v)
 $$$
 
 main a b =
+  $init_gpio()
   let timer = new ()
   let count = new 0
-  after 3000000, timer <- ()
-  wait timer
   loop
     $printInt(deref count)
+    $set_led(deref count)
     count <- deref count + 1
     after 100000, timer <- ()
     wait timer
