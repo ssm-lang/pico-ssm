@@ -1,13 +1,15 @@
 .define PUBLIC CPU_TO_MYPIO_IRQ 5
 .program ssm_input
+set x, 0
+write:
+mov y, x
+mov isr, x
+push
 .wrap_target
-; set pins, 0
-; wait 1 pin 0
-; set pins, 1
-; wait 0 pin 0
-in pins, 32
-mov osr, isr
-out pins, 32
+in pins, 1
+in null, 31
+mov x, isr
+jmp x!=y write
 .wrap
 
 % c-sdk {

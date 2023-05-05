@@ -18,6 +18,9 @@ uint32_t read_gpio(void) {
 
 
 int main(void) {
+
+    uint32_t rx_fifo_out;
+
     stdio_init_all();
 
     sleep_ms(10);
@@ -38,7 +41,8 @@ int main(void) {
     printf("Current GPIO situation: %08x\n", read_gpio());
 
     while (1) {
-        sleep_ms(1000);
+        rx_fifo_out = pio_sm_get_blocking(pio0, 0);
+        printf("Input switched to %u at time %llu\n", rx_fifo_out, time_us_64());
     }
 
     return 0;
