@@ -8,6 +8,9 @@ target_sources(serial-blink1
 
 target_link_libraries(serial-blink1
   pico_stdlib
+  # Including the double_reset library makes it so that two taps on
+  # the reset button emulates reset with BOOTSEL, i.e., appear as a drive
+  pico_bootsel_via_double_reset
   ssm-runtime
 )
 
