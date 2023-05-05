@@ -1,12 +1,11 @@
 ; Basic program that toggles a GPIO pin every time it receives an IRQ
 ; NOTE that SSM_OUT_SET_IRQ is defined as 4
 .program mypio
-    set pins, 1
 .wrap_target
     wait 1 irq 4
-    set pins, 0
-    wait 1 irq 4
     set pins, 1
+    wait 1 irq 4
+    set pins, 0
 .wrap
 
 % c-sdk {

@@ -9,8 +9,13 @@
 #include "mypio.pio.h"
 #include "ssm-output.pio.h"
 
-#define CLK_MHZ 125
-// #define CLK_MHZ 1
+// #define CLK_MHZ 128u
+#define CLK_MHZ 125u
+// #define CLK_MHZ 64u
+// #define CLK_MHZ 48u
+// #define CLK_MHZ 1u
+
+#define DEATH_COUNT 8
 
 uint32_t clk_sys_hz = 125000000; // Default is (usually) 125MHz (?)
 
@@ -57,18 +62,35 @@ void mysleep_until(uint32_t when_us) {
 }
 
 int main(void) {
+  // Set sys_clk to run at 128MHz
+  // set_sys_clock_pll(1536000, 6, 2);
+  // Set sys_clk to run at 64MHz
+  // set_sys_clock_pll(1536, 6, 4);
+
+  // set_sys_clock_48mhz();
+  //
+
+  // This seems to work... (i.e., set the timer) but why doesn't
+  // set_sys_clock_pll() work? And what is the hazard of doing this...?
+  // Also this seems to hang the PIO device.
+  // clock_configure(clk_sys,
+  //                   CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+  //                   CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+  //                   128 * MHZ,
+  //                   128 * MHZ);
+
   stdio_init_all();
 
   sleep_ms(500);
 
   printf("\n\n=== ssm_output_ctr_test ===\n");
 
-  // Set sys_clk to run at 128MHz
-  // set_sys_clock_pll(1536, 6, 2);
-
   clk_sys_hz = clock_get_hz(clk_sys);
+  int clk_peri_hz = clock_get_hz(clk_peri);
 
   printf("System clock is running at %u Hz\n", clk_sys_hz);
+  printf("Peri clock is running at %u Hz\n", clk_peri_hz);
+
   printf("At a period of %.3fns\n", (2. / clk_sys_hz) * 1000000000.);
 
   initialize_alarm();
@@ -92,12 +114,61 @@ int main(void) {
   // Off to the races
   pio_set_sm_mask_enabled(pio0, (1 << sm_ctr) | (1 << sm_dbg), true);
 
+  // Give PIO devices some time to wake up
+  mysleep_until(time_us += 1000000);
+
+  int death = -1;
+
   while (true) {
     // Wake up every 1ms
-    ssm_output_set_ctr(pio0, sm_ctr, ticks_to_ctr((time_us + 500) * CLK_MHZ));
-    printf("Iteration for time %d\n", time_us);
+    uint32_t  wake_up_us = time_us + 5000u,
+              wake_up_8us = wake_up_us / 8,
+              wake_up_ctr = ~(wake_up_8us * CLK_MHZ),
+              wake_up_ticks = wake_up_us * CLK_MHZ;
+              // wake_up_ctr = ticks_to_ctr(wake_up_ticks);
 
-    mysleep_until(time_us += 1000000);
+    ssm_output_set_ctr(pio0, sm_ctr, wake_up_ctr);
+    printf("\nIteration for time %u\n", time_us);
+    printf("\tWake up (us): %u\n", wake_up_us);
+    printf("\tWake up (ticks): %u\n", wake_up_ticks);
+    printf("\tWake up (8us): %u\n", wake_up_8us);
+    printf("\tWake up (ctr): %u\n", wake_up_ctr);
+
+    uint8_t gpio_before = gpio_get(PIN);
+    if (gpio_before)
+      printf("\tCurrent GPIO (start of iteration): 1\n");
+    else
+      printf("\tCurrent GPIO (start of iteration): 0\n");
+
+    mysleep_until(time_us += 500000);
+
+    uint8_t gpio_mid = gpio_get(PIN);
+
+    if (gpio_mid)
+      printf("\tCurrent GPIO (start of iteration): 1\n");
+    else
+      printf("\tCurrent GPIO (start of iteration): 0\n");
+
+    if (gpio_mid == gpio_before) {
+      printf("!!!!!!! ERROR: gpio pin did not change after setting counter !!!!!!!\n");
+      if (death < 0)
+        death = DEATH_COUNT;
+    }
+
+    mysleep_until(time_us += 500000);
+
+    if (gpio_mid != gpio_get(PIN)) {
+      printf("!!!!!!! ERROR: gpio pin changed without setting counter !!!!!!!\n");
+      if (death < 0)
+        death = DEATH_COUNT;
+    }
+
+    if (death > 0)
+      if (!--death)
+        break;
   }
+
+  printf("Game over\n");
+
   return 0;
 }
