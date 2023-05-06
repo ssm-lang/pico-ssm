@@ -10,7 +10,6 @@ target_link_libraries(${test_name}
     pico_stdlib
     hardware_pio
     hardware_dma
-    hardware_pwm
     hardware_clocks
     ssm-pio-header
 )

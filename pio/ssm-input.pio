@@ -41,50 +41,52 @@
 
 .define public SSM_INPUT_IRQ_NUM 0
 
-; .program ssm_input
-;     in pins, 32         ; ISR <- read GPIO
-;     mov x, isr          ; X <- ISR
-;     set y, 0            ; Y <- 0
-; .wrap_target
-; cmp:
-;     mov osr, y          ; OSR <- Y (back up counter)
-;     in pins, 32         ; ISR <- read GPIO
-;     mov y, isr          ; Y <- ISR
-;     jmp x!=y, update    ; Compare prev with cur
-;     mov y, osr          ; Y <- OSR (restore counter)
-; resume_cmp:
-;     jmp y--, cmp        ; Y--, return to cmp
-; ; cmp spillover block, in case Y was zero
-;     mov osr, y          ; OSR <- Y (back up counter)
-;     in pins, 32         ; ISR <- read GPIO
-;     mov y, isr          ; Y <- ISR
-;     jmp x!=y, update    ; Compare prev with cur
-;     mov y, osr          ; Y <- OSR (restore counter)
-;     jmp y--, cmp        ; Y--, resume cmp
-; ; We don't need to worry about spillover here since Y-- can never be zero twice
-; update:
-;     mov x, isr          ; X <- ISR (set prev to cur)
-;     push noblock        ; FIFO <- ISR
-;     mov isr, osr        ; ISR <- OSR (currently storing counter)
-;     push noblock        ; FIFO <- ISR
-;     irq nowait SSM_INPUT_IRQ_NUM ; notify CPU
-;     mov y, osr          ; Y <- OSR (restore counter)
-;     jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
-;     jmp y--, cmp        ; Y--, always loops back to cmp
-; .wrap
-
 .program ssm_input
-    in pins, 32
-    mov y, isr
+    in pins, 32         ; ISR <- read GPIO
+    mov x, isr          ; X <- ISR
+    set y, 0            ; Y <- 0
+.wrap_target
+cmp:
+    mov osr, y          ; OSR <- Y (back up counter)
+    in pins, 32         ; ISR <- read GPIO
+    mov y, isr          ; Y <- ISR
+    jmp x!=y, update    ; Compare prev with cur
+    mov y, osr          ; Y <- OSR (restore counter)
+resume_cmp:
+    jmp y--, cmp        ; Y--, return to cmp
+; cmp spillover block, in case Y was zero
+    mov osr, y          ; OSR <- Y (back up counter)
+    in pins, 32         ; ISR <- read GPIO
+    mov y, isr          ; Y <- ISR
+    jmp x!=y, update    ; Compare prev with cur
+    mov y, osr          ; Y <- OSR (restore counter)
+    jmp y--, cmp        ; Y--, resume cmp
+; We don't need to worry about spillover here since Y-- can never be zero twice
 update:
     mov x, isr          ; X <- ISR (set prev to cur)
     push noblock        ; FIFO <- ISR
-    irq nowait SSM_INPUT_IRQ_NUM [2]; notify CPU, also wait 2 cycles
-.wrap_target
-    in pins, 32         ; ISR <- read GPIO
-    mov y, isr          ; Y <- ISR
-    jmp x!=y, update [5]   ; Compare prev with cur, wait 5 cycles if no jmp
+    mov isr, osr        ; ISR <- OSR (currently storing counter)
+    push noblock        ; FIFO <- ISR
+    irq nowait SSM_INPUT_IRQ_NUM ; notify CPU
+    mov y, osr          ; Y <- OSR (restore counter)
+    jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
+    jmp y--, cmp        ; Y--, always loops back to cmp
 .wrap
+
+; This is a simpler program, but we probably won't use it
+;
+; .program ssm_input
+;     in pins, 32
+;     mov y, isr
+; update:
+;     mov x, isr          ; X <- ISR (set prev to cur)
+;     push noblock        ; FIFO <- ISR
+;     irq nowait SSM_INPUT_IRQ_NUM [2]; notify CPU, also wait 2 cycles
+; .wrap_target
+;     in pins, 32         ; ISR <- read GPIO
+;     mov y, isr          ; Y <- ISR
+;     jmp x!=y, update [5]   ; Compare prev with cur, wait 5 cycles if no jmp
+; .wrap
 
 % c-sdk {
 /*! \brief Setup SSM input program, and enable the state machine.
@@ -138,6 +140,8 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
 
     // Make the RX FIFO 8-deep
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    // sm_config_set_in_shift(&c, true, true, 32);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);

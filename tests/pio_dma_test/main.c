@@ -1,53 +1,83 @@
-//Taken from https://github.com/GregAC/pico-stuff/blob/main/pwm_dma/pwm_dma_led_fade.c
-
 #include <stdio.h>
-#include "pico/stdlib.h"
+#include <string.h>
+#include <stdlib.h>
+#include "hardware/gpio.h"
+#include "hardware/pio.h"
 #include "hardware/dma.h"
-#include "hardware/pwm.h"
+#include <hardware/clocks.h>
+#include <pico/stdlib.h>
+#include "ssm-input.pio.h"
+
+
+//Max size for input_buffer_bits is 14
+
+#define INPUT_BUFFER_BITS 6
+#define INPUT_BUFFER_SIZE (1 << INPUT_BUFFER_BITS)
+#define PIN_IN 22
+#define PIN_OUT PICO_DEFAULT_LED_PIN
+
+uint32_t input_buffer[INPUT_BUFFER_SIZE] __attribute__((aligned(INPUT_BUFFER_SIZE * sizeof(uint32_t))));
+uint32_t clk_sys_hz = 125000000; // Default is (usually) 125MHz (?)
+
+int pio_dma_init(PIO pio, uint sm, uint32_t *input_buffer) {
+
+    int dma_channel = dma_claim_unused_channel(true);
+    
+    dma_channel_config c = dma_channel_get_default_config(dma_channel);
+    //Read a word at a time
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    //Reads are always from the FIFO, don't increment
+    channel_config_set_read_increment(&c, false);
+    //Writes should increment
+    channel_config_set_write_increment(&c, true);
+    //Get transfers from the RX FIFO
+    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
+    //Make writes go in a ring
+    channel_config_set_ring(&c, true, INPUT_BUFFER_BITS * sizeof(uint32_t));
+
+    //Start reading from the state machine to capture_buffer immediately
+    dma_channel_configure(dma_channel, &c,
+        input_buffer,
+        &pio->rxf[sm],
+        (~0),
+        true
+    );
+
+    return dma_channel;
+}
 
 int main()
 {
-    gpio_set_function(PICO_DEFAULT_LED_PIN, GPIO_FUNC_PWM);
+    int input_sm, dma_channel;
+    int i = 0;
+    uint highest_time = ~0;
 
-    int led_pwm_slice_num = pwm_gpio_to_slice_num(PICO_DEFAULT_LED_PIN);
+    memset(input_buffer, ~0, INPUT_BUFFER_SIZE * sizeof(uint32_t));
 
-    pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&config, 8.f);
-    pwm_init(led_pwm_slice_num, &config, true);
+    stdio_init_all();
 
-    uint32_t fade[512];
+    printf("\n\n=== ssm_input_test ===\n");
 
-    int j = 0;
-    for (int i = 0; i < 256; ++i) {
-        // We need a value from 0 - (2^16 - 1), i ranges from 0 - 255. Squaring here gives us
-        // almost the full range of values whilst provided some gamma correction to give a more
-        // linear fade effect.
-        j = 256 - i;
-        fade[i] = (i * i) << 16;
-        fade[i + 256] = (j * j) << 16;
-    }
+    clk_sys_hz = clock_get_hz(clk_sys);
 
-    // Setup DMA channel to drive the PWM
-    int pwm_dma_channel = dma_claim_unused_channel(true);
+    printf("System clock is running at %u Hz\n", clk_sys_hz);
+    printf("At a period of %.3fns\n", (2. / clk_sys_hz) * 1000000000.);
 
-    dma_channel_config pwm_dma_channel_config = dma_channel_get_default_config(pwm_dma_channel);
-    // Transfers 32-bits at a time, increment read address so we pick up a new fade value each
-    // time, don't increment writes address so we always transfer to the same PWM register.
-    channel_config_set_transfer_data_size(&pwm_dma_channel_config, DMA_SIZE_32);
-    channel_config_set_read_increment(&pwm_dma_channel_config, true);
-    channel_config_set_write_increment(&pwm_dma_channel_config, false);
-    // Transfer when PWM slice that is connected to the LED asks for a new value
-    channel_config_set_dreq(&pwm_dma_channel_config, DREQ_PWM_WRAP0 + led_pwm_slice_num);    
+    gpio_set_pulls(PIN_IN, true, false); //Set to pull-up
+    input_sm = ssm_input_program_start(pio0, PIN_IN, 32);
+
+    printf("Enabled state machines\n");
+
+    dma_channel = pio_dma_init(pio0, input_sm, input_buffer);
 
     while(true) {
-        dma_channel_configure(
-            pwm_dma_channel,
-            &pwm_dma_channel_config,
-            &pwm_hw->slice[led_pwm_slice_num].cc, // Write to PWM counter compare
-            fade, // Read values from fade buffer
-            512, // 256 values to copy
-            true // Start immediately.
-        );
-        dma_channel_wait_for_finish_blocking(pwm_dma_channel);
+        if (pio_interrupt_get(pio0, SSM_INPUT_IRQ_NUM)) {
+            for (; input_buffer[i+1] < highest_time; i = (i + 2) % INPUT_BUFFER_SIZE) {
+                printf("Input %lu at time %lu\n", input_buffer[i], (~0) - input_buffer[i+1]);
+                highest_time = input_buffer[i+1];
+            }
+            printf("\n");
+            pio_interrupt_clear(pio0, SSM_INPUT_IRQ_NUM);
+        }
     }
 }
