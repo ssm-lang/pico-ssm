@@ -3,7 +3,6 @@
 #include <hardware/pio.h>
 #include <pico/sem.h>
 #include <pico/stdlib.h>
-#include <ssm/pio/ssm-ctr.h>
 #include <stdio.h>
 
 #include "mypio.pio.h"
@@ -101,15 +100,17 @@ int main(void) {
 
   printf("State machines: %d for ctr and %d for dbg\n", sm_ctr, sm_dbg);
 
-  // Read lower 32 bits of system clock without
+  // Read lower 32 bits of system clock without worrying about higher bits.
   uint32_t time_us = timer_hw->timerawl;
 
-  // init_time is in microseconds, so we multiply by 128 to get the number of
-  // sys_clk ticks. Then we use ticks_to_ctr to convert to PIO device counts,
-  // i.e., divide by 8 and then bit-flip.
-  ssm_output_set_ctr(pio0, sm_ctr, ticks_to_ctr(time_us * CLK_MHZ));
+  // init_time is in microseconds, so we multiply by CLK_MHZ to get the number
+  // of sys_clk ticks. Then we divide by 8 and bit-flip to convert to counter
+  // system that the ssm_output_ctr program uses.
+  uint32_t init_ctr = ~(time_us * CLK_MHZ / 8);
 
-  printf("Initializing start time to %u (%u ticks)\n", time_us, ticks_to_ctr(time_us * CLK_MHZ));
+  ssm_output_set_ctr(pio0, sm_ctr, init_ctr);
+
+  printf("Initializing start time to %u (%u ctr)\n", time_us, init_ctr);
 
   // Off to the races
   pio_set_sm_mask_enabled(pio0, (1 << sm_ctr) | (1 << sm_dbg), true);

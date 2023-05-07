@@ -9,9 +9,17 @@ add_library(ssm-pio-header INTERFACE)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-input.pio)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-timer.pio)
-target_include_directories(ssm-pio-header INTERFACE include)
 
-add_library(ssm-pio INTERFACE)
+add_library(ssm-pio)
+target_sources(ssm-pio
+    PRIVATE ssm-pio.c
+)
+
+target_include_directories(ssm-pio PUBLIC include)
+
 target_link_libraries(ssm-pio
-    INTERFACE ssm-pio-header
+    pico_stdlib
+    hardware_pio
+    hardware_clocks
+    ssm-pio-header
 )
