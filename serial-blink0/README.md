@@ -1,5 +1,10 @@
 # Serial Port "blink" example for the rp2040 (Raspberry Pi Pico)
 
+Uses Pico SDK code for calling `printf()`, toggling a GPIO output pin,
+and waiting (use `sleep_ms()`)
+
+# Compiling
+
 Compile with "make" in the directory above
 
 Binaries are placed in build/serial-blink
