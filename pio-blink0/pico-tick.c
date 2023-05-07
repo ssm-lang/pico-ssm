@@ -125,9 +125,42 @@ void initialize_alarm()
   set_alarm((ssm_time_t) ~0);   // Far enough in the future to be irrelevant
 }
 
+
+/******************************
+ * PIO Output Management
+ ******************************/
+
+#define OUTPUT_PIO pio0
+
+int pio_output_sm_ctr; // State machine for counter/alarm
+int pio_output_sm_out; // State machine for output
+
+static inline void ssm_output_init(uint32_t pin_mask) {
+  pio_output_sm_ctr = ssm_output_ctr_init(OUTPUT_PIO);
+  pio_output_sm_out = ssm_output_out_init(OUTPUT_PIO, pin_mask);
+
+  pio_set_sm_mask_enabled(pio0,
+			  (1 << pio_output_sm_ctr) | (1 << pio_output_sm_out),
+			  true);
+
+  // Initialize the timer count based on the current hardware counter value
+  uint32_t lo = timer_hw->timelr;
+  ssm_output_set_ctr(pio0, pio_output_sm_ctr, ~( lo << 4));
+  printf("Initialized counter to %d\n", lo);
+}
+
+static inline void ssm_pio_schedule_output(uint64_t time_ns,
+					   uint32_t value_mask) {
+  ssm_output_set_ctr(OUTPUT_PIO, pio_output_sm_ctr, (uint32_t) time_ns);
+  ssm_output_put(OUTPUT_PIO, pio_output_sm_out, value_mask);
+}
+
 #define LED_PIN 14
 
 int ssm_platform_entry(void) {
+
+  // Set up the PIO output system
+  ssm_output_init(1 << LED_PIN);  
 
   // Initialize the semaphore
   sem_init(&ssm_tick_sem, 0, 1);
@@ -135,13 +168,7 @@ int ssm_platform_entry(void) {
   // Configure our alarm
   initialize_alarm();
 
-  int sm;
-  if ((sm = ssm_output_out_init(pio0, 1 << LED_PIN)) < 0) {
-    printf("Error! ssm_output_program_init() returned %d\n", sm);
-    return 1;
-  }
-  
-  pio_sm_set_enabled(pio0, sm, true);  
+
   
   ssm_mem_init(&alloc_page, &alloc_mem, &free_mem);
 
@@ -167,11 +194,21 @@ int ssm_platform_entry(void) {
 
     __compiler_memory_barrier();
 
-    // Write to the GPIO if we're past the deadline for updating it
-    if (real_time >= ssm_to_sv(gpio_output)->later_time) {
-      ssm_output_put(pio0, sm,
+    // Update the scheduled GPIO
+
+    uint64_t gpio_later = ssm_to_sv(gpio_output)->later_time;
+    if (gpio_later != SSM_NEVER) {
+      printf("scheduled %d at %llu\n",
+	     ssm_unmarshal(ssm_to_sv(gpio_output)->later_value),
+	     gpio_later);
+
+      gpio_later = gpio_later << 4;
+      ssm_pio_schedule_output(~gpio_later,
+			      ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
+    /*      ssm_output_put(pio0, pio_output_sm_out,
 		     ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
-      pio0->irq_force = 1 << SSM_OUT_SET_IRQ; // force the IRQ
+		     pio0->irq_force = 1 << SSM_OUT_SET_IRQ; // force the IRQ
+    */
     }
 
     if (next_time <= real_time)

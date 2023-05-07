@@ -4,7 +4,10 @@ target_sources(pio-blink0
   PRIVATE main.c
   PRIVATE pico-tick.c
   PRIVATE blink.c
-)
+  )
+
+pico_generate_pio_header(pio-blink0 ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
+
 
 target_link_libraries(pio-blink0
   pico_stdlib
@@ -13,7 +16,6 @@ target_link_libraries(pio-blink0
   pico_bootsel_via_double_reset
   ssm-runtime
   hardware_pio
-  ssm-pio-header
 )
 
 pico_enable_stdio_usb(pio-blink0 1)

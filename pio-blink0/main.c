@@ -7,8 +7,6 @@
 int main(void) {
   stdio_init_all();
 
-  printf("PIO Blink 0 example\n");
-
   ssm_platform_entry();
 
   printf("main() terminating\n");
