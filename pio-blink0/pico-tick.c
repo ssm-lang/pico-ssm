@@ -146,7 +146,8 @@ static inline void ssm_output_init(uint32_t pin_mask) {
   // Initialize the timer count based on the current hardware counter value
   uint32_t lo = timer_hw->timelr;
   ssm_output_set_ctr(pio0, pio_output_sm_ctr, ~( lo << 4));
-  printf("Initialized counter to %d\n", lo);
+  
+  // printf("Initialized counter to %d\n", lo);
 }
 
 static inline void ssm_pio_schedule_output(uint64_t time_ns,
@@ -190,25 +191,20 @@ int ssm_platform_entry(void) {
     ssm_time_t real_time = get_real_time();
     ssm_time_t next_time = ssm_next_event_time();
 
-    printf("real %llu next %llu\n", real_time, next_time);
+    // printf("real %llu next %llu\n", real_time, next_time);
 
     __compiler_memory_barrier();
 
     // Update the scheduled GPIO
-
     uint64_t gpio_later = ssm_to_sv(gpio_output)->later_time;
     if (gpio_later != SSM_NEVER) {
-      printf("scheduled %d at %llu\n",
+      /* printf("scheduled %d at %llu\n",
 	     ssm_unmarshal(ssm_to_sv(gpio_output)->later_value),
-	     gpio_later);
+	     gpio_later); */
 
       gpio_later = gpio_later << 4;
       ssm_pio_schedule_output(~gpio_later,
 			      ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
-    /*      ssm_output_put(pio0, pio_output_sm_out,
-		     ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
-		     pio0->irq_force = 1 << SSM_OUT_SET_IRQ; // force the IRQ
-    */
     }
 
     if (next_time <= real_time)
@@ -276,7 +272,5 @@ clk_rtc  = 47kHz
 clk_ref  = 12001kHz
 
 Hello, 128MHz
-
-
 
  */

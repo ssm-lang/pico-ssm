@@ -1,36 +1,7 @@
 main a gpio =
   let timer = new ()
-  loop
-    after  750000, gpio <- 16384 - deref gpio
-    after 1000000, timer <- ()
-    wait timer
-    
-/*
-  let timer = new ()
-  after  750000, gpio <- 16384
   after 1000000, timer <- ()
-  wait timer
-  after  250000, gpio <- 0
-  after 5000000, timer <- ()
-  wait timer
-*/
-
-/*
   loop
-    after 100000, gpio <- 16384 - deref gpio
-    wait gpio
-    */
-
-/*
-  let timer = new ()
-  after  500000, gpio <- 16384  // reset to LED on = 510 ms with << 4
-  after  600000, timer <- ()
-  wait timer
-  after  500000, gpio <- 0 // Turns off LED 1s past turn on with << 4
-  after 5000000, timer <- ()
-  wait timer
- 
-
-    */
-    
-  
+    after    7500, gpio <- 16384 - deref gpio
+    after  250000, timer <- ()  // Fails at 200000 and below
+    wait timer
