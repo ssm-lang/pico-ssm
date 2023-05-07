@@ -29,3 +29,5 @@ add_subdirectory(serial-blink0)
 add_subdirectory(serial-blink1)
 add_subdirectory(serial-blink2)
 add_subdirectory(pio-blink0)
+
+add_subdirectory(hello_128MHz)

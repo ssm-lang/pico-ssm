@@ -5,6 +5,8 @@
 #include <ssm-internal.h>
 
 int main(void) {
+  set_sys_clock_pll(1536000000, 6, 2); // 128 MHz
+
   stdio_init_all();
 
   ssm_platform_entry();

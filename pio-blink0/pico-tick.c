@@ -224,3 +224,59 @@ int ssm_platform_entry(void) {
   
   return 0;
 }
+
+/*
+
+125 MHz main clock?
+
+8 cycles per PIO clock
+
+1 us timer resolution =
+
+
+Reported by hello_48MHz.c,
+
+pll_sys  = 125000kHz  = 125 MHz
+pll_usb  = 48000kHz
+rosc     = 6068kHz
+clk_sys  = 125000kHz
+clk_peri = 125000kHz
+clk_usb  = 48000kHz
+clk_adc  = 48000kHz
+clk_rtc  = 47kHz
+
+clk_ref  = 12001kHz   = 12 MHz
+
+
+
+The PIO runs at the system clock rate 
+
+
+Using hello_128MHz.c,
+
+Hello, world!
+pll_sys  = 125000kHz
+pll_usb  = 48000kHz
+rosc     = 6068kHz
+clk_sys  = 125000kHz
+clk_peri = 125001kHz
+clk_usb  = 48000kHz
+clk_adc  = 48000kHz
+clk_rtc  = 47kHz
+clk_ref  = 12001kHz
+
+pll_sys  = 128000kHz
+pll_usb  = 48000kHz
+rosc     = 6068kHz
+clk_sys  = 128000kHz
+clk_peri = 48000kHz
+clk_usb  = 48000kHz
+clk_adc  = 48000kHz
+clk_rtc  = 47kHz
+clk_ref  = 12001kHz
+
+Hello, 128MHz
+
+
+
+ */
