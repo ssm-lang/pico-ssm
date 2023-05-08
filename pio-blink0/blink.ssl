@@ -2,6 +2,6 @@ main a gpio =
   let timer = new ()
   after 1000000, timer <- ()
   loop
-    after    7500, gpio <- 16384 - deref gpio
-    after  250000, timer <- ()  // Fails at 200000 and below
+    after   5, gpio <- 16384 - deref gpio
+    after  25, timer <- ()
     wait timer
