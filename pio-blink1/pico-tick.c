@@ -3,10 +3,13 @@
 #include <pico/time.h>
 #include <hardware/timer.h>
 #include <hardware/irq.h>
-
 // Requires hardware_pio among the target_link_libraries
-
 #include "hardware/pio.h"
+// Requires hardware_dma among the larget_link_libraries 
+#include "hardware/dma.h"
+
+
+
 #include "ssm-output.pio.h"
 
 #include <ssm-internal.h>
@@ -169,6 +172,8 @@ static inline void ssm_pio_output_now(uint32_t value) {
  * PIO Input System
  ******************************/
 
+#define INPUT_PIO pio0
+
 // Number of address bits in the byte address; max 14
 #define PIO_RING_BUFFER_LOG2_SIZE 6
 #define PIO_RING_BUFFER_SIZE (1 << PIO_RING_BUFFER_LOG2_SIZE)
@@ -176,6 +181,42 @@ static inline void ssm_pio_output_now(uint32_t value) {
 // PIO input ring buffer; all its lower address bits should be 0
 uint8_t pio_ring_buffer[PIO_RING_BUFFER_SIZE]
           __attribute((aligned(PIO_RING_BUFFER_SIZE)));
+
+// DMA channel for managing the ring buffer
+int pio_input_dma_channel;
+
+int pio_input_sm; // State machine for input process
+
+void pio_input_init()
+{
+
+  // FIXME: load the input program
+
+  // DMA Channel initialization
+  
+  pio_input_dma_channel = dma_claim_unused_channel(true);
+
+  // FIXME: verify one was acquired
+
+  dma_channel_config c =
+    dma_channel_get_default_config(pio_input_dma_channel);
+
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_32); // 32 bit words 
+  channel_config_set_read_increment(&c, false); // Don't increment FIFO reads
+  channel_config_set_write_increment(&c, true); // Increment buffer writes
+  channel_config_set_dreq(&c,
+       pio_get_dreq(INPUT_PIO, pio_input_sm, false)); // Rate from RX FIFO
+  channel_config_set_ring(&c, true, PIO_RING_BUFFER_LOG2_SIZE); // Use as ring buffer
+
+  dma_channel_configure(pio_input_dma_channel,
+			&c,
+			pio_ring_buffer, // Write to ring buffer
+			&INPUT_PIO->rxf[pio_input_sm], // read from PIO RX FIFO
+			(~0), // Count: make it big. FIXME: restart
+			true);
+
+}
+
 
 
 /******************************

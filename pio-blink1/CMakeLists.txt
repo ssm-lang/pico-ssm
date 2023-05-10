@@ -19,6 +19,7 @@ target_link_libraries(pio-blink1
   pico_bootsel_via_double_reset
   ssm-runtime
   hardware_pio
+  hardware_dma
 )
 
 pico_enable_stdio_usb(pio-blink1 1)
