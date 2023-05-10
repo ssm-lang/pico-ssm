@@ -1,0 +1,132 @@
+; Internal IRQ number used to communicate between PIO state machines
+.define PUBLIC SSM_OUT_SET_IRQ 4
+
+; Interruptible output counter (8 cycles per tick)
+.program ssm_output_ctr
+; .side_set 4
+    pull noblock                ; side 0b1110   ; Pull initial counter from FIFO
+    mov y, osr                  ; side 0b1101   ; Initialize counter variable
+                                                ; Let block spill into resume block
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
+continue:
+    jmp resume                  ; side 0b0010   ; Goto decrement wraparound
+
+; Regs:
+;   X: target value
+;   Y: new target value (read from OSR)
+;   OSR: _ (also holds new target value)
+;   ISR: current counter (stashed from Y)
+new_target:
+    mov x, y                    ; side 0b0100   ; Set new target value
+    mov y, isr                  ; side 0b0100   ; Restore counter to Y
+    jmp resume                  ; side 0b0100   ; Goto decrement/wraparound
+
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
+.wrap_target
+wait_ctr:
+    pull noblock                ; side 0b0000   ; OSR <- FIFO else X
+    mov isr, y                  ; side 0b0000   ; Back up counter to ISR
+    mov y, osr                  ; side 0b0000   ; Store pulled value to Y for comparison
+    jmp x!=y,new_target         ; side 0b0000   ; Jump if new target was written to FIFO
+    mov y, isr                  ; side 0b0000   ; Restore counter to Y
+    jmp x!=y, continue          ; side 0b0000   ; Jump if counter not yet reached
+    irq nowait SSM_OUT_SET_IRQ  ; side 0b1000   ; Interrupt ssm_output_out
+resume:
+    jmp y--, wait_ctr           ; side 0b0000
+.wrap
+
+% c-sdk {
+static inline int ssm_output_ctr_init(PIO pio) {
+    if (!pio_can_add_program(pio, &ssm_output_ctr_program))
+        // No available space for program
+        return -1;
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No available state machines to execute program
+        return -1;
+
+    uint offset = pio_add_program(pio, &ssm_output_ctr_program);
+
+    pio_sm_config c = ssm_output_ctr_program_get_default_config(offset);
+
+/*
+    // For debugging
+    sm_config_set_sideset_pins(&c, 6);
+    sm_config_set_sideset(&c, 4, false, false);
+    pio_gpio_init(pio, 6);
+    pio_gpio_init(pio, 7);
+    pio_gpio_init(pio, 8);
+    pio_gpio_init(pio, 9);
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xf << 6, 0xf << 6);
+    // Slow down for logic analyzer
+    sm_config_set_clkdiv_int_frac(&c, 125, 0);
+*/
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+
+static inline void ssm_output_set_ctr(PIO pio, uint sm, uint32_t ctr) {
+    pio_sm_put(pio, sm, ctr);
+}
+%}
+
+; Latching output emitter (interrupt-driven)
+.program ssm_output_out
+    in pins, 32
+    mov osr, isr                ; Initialize OSR to current GPIO state
+.wrap_target
+    wait 1 irq SSM_OUT_SET_IRQ  ; Wait for interrupt from ssm_output_ctr
+    out pins, 32                ; GPIO pins <- OSR
+.wrap
+
+% c-sdk {
+
+static inline int ssm_output_out_init(PIO pio, uint32_t pin_mask) {
+    if (!pio_can_add_program(pio, &ssm_output_out_program))
+        // No available space for program
+        return -1;
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No available state machines to execute program
+        return -1;
+
+    uint offset = pio_add_program(pio, &ssm_output_out_program);
+
+    pio_sm_config c = ssm_output_out_program_get_default_config(offset);
+
+    // We're addressing GPIO pins in a 0-indexed fashion
+    sm_config_set_out_pins(&c, 0, 32);
+
+    // Configure output pins to be driven by PIO device
+    for (int pin_idx = 0; pin_idx < 32; pin_idx++)
+        if ((0x1 << pin_idx) & pin_mask)
+            pio_gpio_init(pio, pin_idx);
+
+    // For all pins in pin_mask, set the direction to output
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, pin_mask);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+
+static inline void ssm_output_put(PIO pio, uint sm, uint32_t value) {
+    pio_sm_put(pio, sm, value);  // put value into TX FIFO
+    __compiler_memory_barrier();
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // execute pull block, i.e., OSR <- TX FIFO
+}
+
+%}
