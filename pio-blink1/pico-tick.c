@@ -194,6 +194,16 @@ int pio_input_dma_channel;
 
 int pio_input_sm; // State machine for input process
 
+int input_fifo_count = 0;
+
+static void input_fifo_isr(void) {
+  pio_interrupt_clear(pio0, SSM_INPUT_IRQ_NUM);
+  printf(".");
+
+  // FIXME: should just grab the semaphore to wake up the main loop
+  // which should check the queue
+}
+
 void pio_input_init()
 {
 
@@ -213,6 +223,10 @@ void pio_input_init()
   
   pio_input_dma_channel = dma_claim_unused_channel(true);
 
+  // IRQ from the PIO  
+  irq_set_exclusive_handler(SSM_INPUT_IRQ_NUM, input_fifo_isr);
+
+    
   // FIXME: verify one was acquired
 
   dma_channel_config c =
@@ -232,6 +246,9 @@ void pio_input_init()
 			(~0), // Count: make it big. FIXME: restart
 			true);
 
+  // FIXME: use two DMA channels: one for the ring buffer data,
+  // the other for restarting the first, and chain the two together
+  // The second should simply load the same large count to the first
 }
 
 
@@ -274,6 +291,12 @@ int ssm_platform_entry(void) {
     // printf("real %llu next %llu\n", real_time, next_time);
 
     __compiler_memory_barrier();
+
+    if (pio_interrupt_get(INPUT_PIO, SSM_INPUT_IRQ_NUM)) {
+      printf("#");
+      pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
+    }
+
 
     if (next_time <= real_time) {
       ssm_tick(); // We're behind: catch up to reality
