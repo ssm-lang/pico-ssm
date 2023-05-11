@@ -11,10 +11,17 @@
 
 
 #include "ssm-output.pio.h"
+#include "ssm-input.pio.h"
 
 #include <ssm-internal.h>
 #include <ssm-platform.h>
 
+/******************************
+ * Pin configuration
+ ******************************/
+
+#define LED_PIN 14
+#define BUTTON_PIN 5
 
 /******************************
  * Memory allocation
@@ -192,6 +199,16 @@ void pio_input_init()
 
   // FIXME: load the input program
 
+  int success = ssm_input_program_start(INPUT_PIO, BUTTON_PIN, 1);
+  if (success < 0) {
+    for (;;) {
+      printf("failed\n");
+      sleep_ms(500);
+    }
+  }
+
+  // FIXME: need to synchronize the start of both input and output separately
+
   // DMA Channel initialization
   
   pio_input_dma_channel = dma_claim_unused_channel(true);
@@ -222,8 +239,6 @@ void pio_input_init()
 /******************************
  * Main tick loop
  ******************************/
-
-#define LED_PIN 14
 
 int ssm_platform_entry(void) {
 
