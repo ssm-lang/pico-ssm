@@ -207,6 +207,8 @@ static void input_fifo_isr(void) {
 void pio_input_init()
 {
 
+  gpio_set_pulls(BUTTON_PIN, true, false); //Set to pull-up
+
   // FIXME: load the input program
 
   int success = ssm_input_program_start(INPUT_PIO, BUTTON_PIN, 1);
@@ -288,7 +290,7 @@ int ssm_platform_entry(void) {
     ssm_time_t real_time = get_real_time();
     ssm_time_t next_time = ssm_next_event_time();
 
-    // printf("real %llu next %llu\n", real_time, next_time);
+    printf("real %llu next %llu\n", real_time, next_time);
 
     __compiler_memory_barrier();
 
