@@ -21,7 +21,7 @@
  ******************************/
 
 #define LED_PIN 14
-#define BUTTON_PIN 5
+#define BUTTON_PIN 4
 
 /******************************
  * Memory allocation
@@ -146,7 +146,7 @@ int pio_output_sm_out; // State machine for output
 
 #define US_TO_PIO(t) (~((t) << 4))
 
-static inline void ssm_output_init(uint32_t pin_mask) {
+static inline void pio_output_init(uint32_t pin_mask) {
   pio_output_sm_ctr = ssm_output_ctr_init(OUTPUT_PIO);
   pio_output_sm_out = ssm_output_out_init(OUTPUT_PIO, pin_mask);
 
@@ -179,7 +179,8 @@ static inline void ssm_pio_output_now(uint32_t value) {
  * PIO Input System
  ******************************/
 
-#define INPUT_PIO pio0
+// #define INPUT_PIO pio0
+#define INPUT_PIO pio1
 
 // Number of address bits in the byte address; max 14
 #define PIO_RING_BUFFER_LOG2_SIZE 6
@@ -197,37 +198,41 @@ int pio_input_sm; // State machine for input process
 int input_fifo_count = 0;
 
 static void input_fifo_isr(void) {
-  pio_interrupt_clear(pio0, SSM_INPUT_IRQ_NUM);
+  pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
   printf(".");
 
   // FIXME: should just grab the semaphore to wake up the main loop
   // which should check the queue
+  sem_release(&ssm_tick_sem); // Wake up the tick loop
 }
 
 void pio_input_init()
 {
-
-  gpio_set_pulls(BUTTON_PIN, true, false); //Set to pull-up
+  gpio_set_pulls(BUTTON_PIN, true, false); // Set to pull-up
 
   // FIXME: load the input program
 
-  int success = ssm_input_program_start(INPUT_PIO, BUTTON_PIN, 1);
+  int success = ssm_input_program_start(INPUT_PIO, BUTTON_PIN, 32);
   if (success < 0) {
     for (;;) {
-      printf("failed\n");
+      printf("ssm_input_program_start failed with %d\n", success);
       sleep_ms(500);
     }
   }
 
-  // FIXME: need to synchronize the start of both input and output separately
+  // FIXME: need to synchronize the start of both input and output
 
   // DMA Channel initialization
-  
+
   pio_input_dma_channel = dma_claim_unused_channel(true);
 
-  // IRQ from the PIO  
-  irq_set_exclusive_handler(SSM_INPUT_IRQ_NUM, input_fifo_isr);
-
+  // IRQ from the PIO
+  // FIXME: need to be very careful about which interrupt this is;
+  // the numbering is different in PIOland
+  irq_set_exclusive_handler(PIO1_IRQ_0, input_fifo_isr);
+  // FIXME: Tricky: this needs to match up with the SM actually used for input
+  pio_set_irq0_source_enabled(INPUT_PIO, PIO_INTR_SM0_LSB, true);
+  irq_set_enabled(PIO1_IRQ_0, true);
     
   // FIXME: verify one was acquired
 
@@ -247,10 +252,11 @@ void pio_input_init()
 			&INPUT_PIO->rxf[pio_input_sm], // read from PIO RX FIFO
 			(~0), // Count: make it big. FIXME: restart
 			true);
-
+  
   // FIXME: use two DMA channels: one for the ring buffer data,
   // the other for restarting the first, and chain the two together
   // The second should simply load the same large count to the first
+
 }
 
 
@@ -261,11 +267,12 @@ void pio_input_init()
 
 int ssm_platform_entry(void) {
 
-  // Set up the PIO output system
-  ssm_output_init(1 << LED_PIN);
-
   // Initialize the semaphore
   sem_init(&ssm_tick_sem, 0, 1);
+
+  // Set up the PIO output system; initialize the semaphore first
+  pio_output_init(1 << LED_PIN);
+  pio_input_init();
 
   // Configure our alarm
   initialize_alarm();
@@ -294,11 +301,12 @@ int ssm_platform_entry(void) {
 
     __compiler_memory_barrier();
 
+#if 0
     if (pio_interrupt_get(INPUT_PIO, SSM_INPUT_IRQ_NUM)) {
       printf("#");
       pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
     }
-
+#endif
 
     if (next_time <= real_time) {
       ssm_tick(); // We're behind: catch up to reality
@@ -310,7 +318,10 @@ int ssm_platform_entry(void) {
 	uint32_t toschedule = (uint32_t) gpio_later;
 	ssm_pio_schedule_output(US_TO_PIO(toschedule),
 				ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
-	// printf("PIO  %u next %u\n", timer_hw->timelr, toschedule);
+	/*
+	printf("PIO  %u next %u\n", (unsigned int) timer_hw->timelr,
+	       (unsigned int) toschedule);
+	*/
       }
 
     } else if (next_time == SSM_NEVER)
