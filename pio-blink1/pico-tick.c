@@ -270,9 +270,19 @@ int ssm_platform_entry(void) {
   // Initialize the semaphore
   sem_init(&ssm_tick_sem, 0, 1);
 
+
+  // TODO: Change input and output init functions
+  // to take a base pin number and pin count for
+  // input and output groups
+  // see sm_config_set_out_pins
+  // sm_set_in_pins
+  // (rapsberry-pi-pico-c-sdk)
+  //
+  // At the moment, they're fighting
+  
   // Set up the PIO output system; initialize the semaphore first
   pio_output_init(1 << LED_PIN);
-  pio_input_init();
+  // pio_input_init();
 
   // Configure our alarm
   initialize_alarm();
