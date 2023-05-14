@@ -1,0 +1,32 @@
+; Basic program that pulls and then sets a pin to high as soon as it starts
+.program mypio
+    pull noblock
+.wrap_target
+    set pins, 1
+.wrap
+
+% c-sdk {
+static inline int mypio_init(PIO pio, uint pin) {
+    if (!pio_can_add_program(pio, &mypio_program))
+        // No available space for program
+        return -1;
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No available state machines to execute program
+        return -1;
+
+    uint offset = pio_add_program(pio, &mypio_program);
+
+    pio_sm_config c = mypio_program_get_default_config(offset);
+
+    // This program just assigns to a single pin.
+    sm_config_set_set_pins(&c, pin, 1);
+    pio_gpio_init(pio, pin);
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, 1u << pin);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+%}
