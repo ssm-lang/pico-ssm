@@ -42,13 +42,16 @@
 .define public SSM_INPUT_IRQ_NUM 0
 
 .program ssm_input
+    pull                ; OSR <- TX FIFO
+    mov y, osr          ; Y <- OSR (initialize the counter)
     in pins, 32         ; ISR <- read GPIO
+    in null, 32
     mov x, isr          ; X <- ISR
-    set y, 0            ; Y <- 0
 .wrap_target
 cmp:
     mov osr, y          ; OSR <- Y (back up counter)
-    in pins, 32         ; ISR <- read GPIO
+    in pins, 1         ; ISR <- read GPIO
+    in null, 32
     mov y, isr          ; Y <- ISR
     jmp x!=y, update    ; Compare prev with cur
     mov y, osr          ; Y <- OSR (restore counter)
@@ -56,7 +59,8 @@ resume_cmp:
     jmp y--, cmp        ; Y--, return to cmp
 ; cmp spillover block, in case Y was zero
     mov osr, y          ; OSR <- Y (back up counter)
-    in pins, 32         ; ISR <- read GPIO
+    in pins, 1         ; ISR <- read GPIO
+    in null, 32
     mov y, isr          ; Y <- ISR
     jmp x!=y, update    ; Compare prev with cur
     mov y, osr          ; Y <- OSR (restore counter)
@@ -110,8 +114,10 @@ update:
 #define SSM_INPUT_IRQ_NUM 0
 
 static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count) {
-    if (pin_count != 32)
-        // Only support 32 input pins at once
+
+
+    if (pin_base + pin_count > 32)
+        // Only support up to 32 input pins at once
         return -1;
     
     if (!pio_can_add_program(pio, &ssm_input_program))
@@ -138,13 +144,20 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
     // On our state machine, set the pins' direction to input
     pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, false);
 
-    // Make the RX FIFO 8-deep
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-
-    // sm_config_set_in_shift(&c, true, true, 32);
-
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
+
+    //Set the in instructions
+    uint null_count = 32 - pin_count;
+    uint pin_in_instr = pio_encode_in(pio_pins, pin_count);
+    uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) : pio_encode_nop();
+
+    pio->instr_mem[offset + 2] = pin_in_instr;
+    pio->instr_mem[offset + 3] = null_in_instr;
+    pio->instr_mem[offset + 6] = pin_in_instr;
+    pio->instr_mem[offset + 7] = null_in_instr;
+    pio->instr_mem[offset + 13] = pin_in_instr;
+    pio->instr_mem[offset + 14] = null_in_instr;
 
     // Set the state machine running
     pio_sm_set_enabled(pio, sm, true);
