@@ -26,10 +26,13 @@ the PIO device.
 
 | Step            | Cumulative SIO diff | Timer diff | Delta |
 |-----------------|---------------------|------------|-------|
-| Read timer      | 875ns (1.14MHz)     | 1us        | x     |
+| Nop             | 375ns (2.67MHz      | x          | x     |
+| Read timer      | 875ns (1.14MHz)     | 1us        | 500ns |
 | Convert counter | 1688ns (592.59kHz)  | 1us        | 813ns |
 | Put to TX FIFO  | 2437ns (410.26kHz)  | 2us        | 749ns |
 | Enable PIO SMs  | 3312ns (301.89kHz)  | 2--3us     | 875ns |
+
+Nop is basically consecutive GPIO puts from the CPU
 
 PIO SM sets GPIO pin at the same time as END GPIO pin (probably too fast for my logic analyzer)
 
@@ -39,7 +42,8 @@ Note that latency goes up to 5313ns when I don't pre-compute the sm mask.
 
 | Step            | Cumulative SIO diff | Timer diff | Delta |
 |-----------------|---------------------|------------|-------|
-| Read timer      | -                   | -          | x     |
+| Nop             | -                   | -          | -     |
+| Read timer      | -                   | -          | -     |
 | Convert counter | -                   | -          | -     |
 | Put to TX FIFO  | -                   | -          | -     |
 | Put to TX FIFO  | 3325ns (307.69kHz)  | 2--3us     | 888ns |

@@ -46,13 +46,14 @@ int main(void) {
 
   gpio_put(START_PIN, true);
   do {
+    break;
     time_us = timer_hw->timerawl;
 
     init_ctr = ~(time_us * CLK_MHZ / 8);
 
     pio_sm_put(pio0, sm1, init_ctr);
 
-    // pio_sm_put(pio0, sm2, init_ctr);
+    pio_sm_put(pio0, sm2, init_ctr);
 
     pio_set_sm_mask_enabled(pio0, sm_mask, true);
   } while (0);
