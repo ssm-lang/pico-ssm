@@ -115,6 +115,9 @@ update:
 
 static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count) {
 
+    if (pin_count == 0)
+        //Pin count needs to be higher than 0, otherwise this won't work!
+        return -1;
 
     if (pin_base + pin_count > 32)
         // Only support up to 32 input pins at once
