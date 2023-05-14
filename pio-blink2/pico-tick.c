@@ -155,7 +155,7 @@ int pio_input_dma_channel;
 
 static void input_fifo_isr(void) {
   pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
-  printf(".");  
+  // printf(".");
   sem_release(&ssm_tick_sem); // Wake up the tick loop
 }
 
@@ -313,7 +313,7 @@ int ssm_platform_entry(void) {
     printf("real %llu next %llu\n", real_time, next_time);
 
     while ( pio_ring_buffer_ptr != (uint32_t *) dma_hw->ch[pio_input_dma_channel].write_addr) {
-      printf("input %llu @ %8lx\n", PIO_TO_US(pio_ring_buffer_ptr[1]), pio_ring_buffer_ptr[0]);
+      printf("in @ %llu : %8lx\n", PIO_TO_US(pio_ring_buffer_ptr[1]), pio_ring_buffer_ptr[0]);
       if (pio_ring_buffer_top == (pio_ring_buffer_ptr += 2))
 	pio_ring_buffer_ptr = (uint32_t *) pio_ring_buffer;
     }
