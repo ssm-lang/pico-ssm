@@ -44,12 +44,14 @@
 .program ssm_input
     pull                ; OSR <- TX FIFO
     mov y, osr          ; Y <- OSR (initialize the counter)
+pins_patch_0:
     in pins, 32         ; ISR <- read GPIO
     in null, 32
     mov x, isr          ; X <- ISR
 .wrap_target
 cmp:
     mov osr, y          ; OSR <- Y (back up counter)
+pins_patch_1:
     in pins, 1         ; ISR <- read GPIO
     in null, 32
     mov y, isr          ; Y <- ISR
@@ -59,6 +61,7 @@ resume_cmp:
     jmp y--, cmp        ; Y--, return to cmp
 ; cmp spillover block, in case Y was zero
     mov osr, y          ; OSR <- Y (back up counter)
+pins_patch_2:
     in pins, 1         ; ISR <- read GPIO
     in null, 32
     mov y, isr          ; Y <- ISR
@@ -76,6 +79,11 @@ update:
     jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
     jmp y--, cmp        ; Y--, always loops back to cmp
 .wrap
+
+.define public PINS_PATCH_0 pins_patch_0
+.define public PINS_PATCH_1 pins_patch_1
+.define public PINS_PATCH_2 pins_patch_2
+
 
 ; This is a simpler program, but we probably won't use it
 ;
@@ -155,12 +163,12 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
     uint pin_in_instr = pio_encode_in(pio_pins, pin_count);
     uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) : pio_encode_nop();
 
-    pio->instr_mem[offset + 2] = pin_in_instr;
-    pio->instr_mem[offset + 3] = null_in_instr;
-    pio->instr_mem[offset + 6] = pin_in_instr;
-    pio->instr_mem[offset + 7] = null_in_instr;
-    pio->instr_mem[offset + 13] = pin_in_instr;
-    pio->instr_mem[offset + 14] = null_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_0] = pin_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_2] = pin_in_instr;
+    pio->instr_mem[offset + ssm_input_PINS_PATCH_2 + 1] = null_in_instr;
 
     // Set the state machine running
     pio_sm_set_enabled(pio, sm, true);
