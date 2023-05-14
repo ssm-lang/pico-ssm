@@ -1,5 +1,83 @@
-; Internal IRQ number used to communicate between PIO state machines
+; Configuration:
+;
+; Each output state machine can read from/write to up to 32 GPIO pins at once,
+; using the in and out programs. These pins must be consecutive.
+;
+; Input program
+;
+; Between iterations:
+; - X holds previous GPIO value
+; - Y holds counter (decremented every 6 instructions)
+; - OSR is used to back up Y between cmp and update
+;
+; This program is pipelined to increase the frequency at which the counter is
+; updated (which also determines the granularity of timestamping).
+;
+; There are two phases of the pipeline. The cmp phase polls the GPIO pins,
+; and loops every 6 instructions when there are no changes on the GPIO pins.
+; Thus, the cmp phase decrements the counter once every iteration.
+;
+; The update phase is triggered when changes are found on the GPIO pins, which
+; writes the GPIO input and then the current counter to the FIFO. It takes 12
+; instructions to go through the cmp then update phase, so it decrements the
+; counter twice before returning to cmp.
+;
+; Because jmp y--, <DEST> will fall throuh when y is zero, we add an additional
+; "spillover" block for the cmp phase which does the exact same thing as cmp
+; (we can't naively jump back because the instructions will be out of phase).
+;
+; Due to the fact that the update phase takes twice as long as the cmp phase,
+; if the GPIO input rapidly changes twice, the second change will be delayed
+; by 6 instructions worth of time.
+;
+; FIFO protocol: (gpio_in ; input_time)
+;                --------- time ------->
+;
+; TODO: determine IRQ number (and set it up??)
+;
+; NOTE: The SDK documentation (3.5.6.3) notes that GPIO pins are equipped with
+; a 2-flipflop synchronizer, which adds 2 cycles of latency. This is less than
+; the 6-cycle clock period of this input program.
+
+.define public SSM_INPUT_IRQ_NUM 0
+
+; Internal IRQ number used to communicate between output PIO state machines
 .define PUBLIC SSM_OUT_SET_IRQ 4
+
+.program ssm_input
+    in pins, 32         ; ISR <- read GPIO
+    mov x, isr          ; X <- ISR
+    set y, 0            ; Y <- 0
+.wrap_target
+cmp:
+    mov osr, y          ; OSR <- Y (back up counter)
+    in pins, 32         ; ISR <- read GPIO
+    mov y, isr          ; Y <- ISR
+    jmp x!=y, update    ; Compare prev with cur
+    mov y, osr          ; Y <- OSR (restore counter)
+resume_cmp:
+    jmp y--, cmp        ; Y--, return to cmp
+; cmp spillover block, in case Y was zero
+    mov osr, y          ; OSR <- Y (back up counter)
+    in pins, 32         ; ISR <- read GPIO
+    mov y, isr          ; Y <- ISR
+    jmp x!=y, update    ; Compare prev with cur
+    mov y, osr          ; Y <- OSR (restore counter)
+    jmp y--, cmp        ; Y--, resume cmp
+; We don't need to worry about spillover here since Y-- can never be zero twice
+update:
+    mov x, isr          ; X <- ISR (set prev to cur)
+    push noblock        ; FIFO <- ISR
+    mov isr, osr        ; ISR <- OSR (currently storing counter)
+    push noblock        ; FIFO <- ISR
+    irq nowait SSM_INPUT_IRQ_NUM ; notify CPU
+    mov y, osr          ; Y <- OSR (restore counter)
+    jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
+    jmp y--, cmp        ; Y--, always loops back to cmp
+.wrap
+
+
+
 
 
 ;
