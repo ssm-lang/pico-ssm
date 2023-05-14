@@ -113,6 +113,76 @@ void initialize_alarm()
 }
 
 /******************************
+ * PIO Input/Output system
+ ******************************/
+
+// PIO blocks in which the various programs reside
+#define INPUT_PIO pio0
+#define OUTPUT_PIO pio1
+
+// State machines of the various components
+#define INPUT_SM 0
+#define ALARM_SM 0
+#define GPIO_SM 1
+
+// Convert the 1us hardware counter to PIO counter values (16 MHz)
+#define US_TO_PIO(t) (~((uint32_t) ((t) << 4)))
+
+static inline void
+ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
+		  uint output_pins_base, uint output_pins_count)
+{
+  // Configure the output pins to be driven by the PIO
+  for (uint i = 0 ; i < output_pins_count ; i++)
+    pio_gpio_init(OUTPUT_PIO, output_pins_base + i);
+  pio_sm_set_consecutive_pindirs(OUTPUT_PIO, GPIO_SM,
+				 output_pins_base, output_pins_count, true);
+  
+  // Upload the output alarm program
+  pio_sm_claim(OUTPUT_PIO, ALARM_SM);
+  uint alarm_offset = pio_add_program(OUTPUT_PIO, &ssm_output_alarm_program);
+  pio_sm_config alarm_c =
+    ssm_output_alarm_program_get_default_config(alarm_offset);
+  // FIXME: more configuration stuff?
+  pio_sm_init(OUTPUT_PIO, ALARM_SM, alarm_offset, &alarm_c);
+
+  // Upload the gpio output program
+  pio_sm_claim(OUTPUT_PIO, GPIO_SM);
+  uint gpio_offset = pio_add_program(OUTPUT_PIO, &ssm_output_gpio_program);
+  pio_sm_config gpio_c =
+    ssm_output_gpio_program_get_default_config(gpio_offset);
+  sm_config_set_out_pins(&gpio_c, output_pins_base, output_pins_count);
+  pio_sm_init(OUTPUT_PIO, GPIO_SM, gpio_offset, &gpio_c);
+
+  // Initialize the output timer based on the current hardware counter value
+  
+  // FIXME: We'd like this to be even more precise since we don't know
+  // the exact latency between reading the hardware counter
+  // and starting the state machines
+  
+  uint32_t lo = timer_hw->timelr;
+  pio_sm_put(OUTPUT_PIO, ALARM_SM, US_TO_PIO(lo));
+
+  pio_set_sm_mask_enabled(OUTPUT_PIO, (1 << ALARM_SM) | (1 << GPIO_SM),
+			  true);
+  
+}
+
+static inline void
+ssm_pio_schedule_output(ssm_time_t pio_time, uint32_t value) {
+  // Send the new output value to the GPIO state machine
+  pio_sm_put(OUTPUT_PIO, GPIO_SM, value);  // put value into TX FIFO
+  __compiler_memory_barrier();
+  // execute pull block, i.e., OSR <- TX FIFO
+  pio_sm_exec(OUTPUT_PIO, GPIO_SM, pio_encode_pull(false, true));
+
+  // Set the new alarm time
+  pio_sm_put(OUTPUT_PIO, ALARM_SM, US_TO_PIO(pio_time));
+}
+
+
+
+/******************************
  * Main tick loop
  ******************************/
 
@@ -120,20 +190,12 @@ int ssm_platform_entry(void) {
 
   // Initialize the semaphore
   sem_init(&ssm_tick_sem, 0, 1);
-
-
-  // TODO: Change input and output init functions
-  // to take a base pin number and pin count for
-  // input and output groups
-  // see sm_config_set_out_pins
-  // sm_set_in_pins
-  // (rapsberry-pi-pico-c-sdk)
-  //
-  // At the moment, they're fighting
   
   // Set up the PIO output system; initialize the semaphore first
   // pio_output_init(1 << LED_PIN);
   // pio_input_init();
+  ssm_pio_gpio_init(6, 1,    // FIXME: input pin numbers
+		    25, 1);  // FIXME: output pin numbers
 
   // Configure our alarm
   initialize_alarm();
@@ -165,7 +227,11 @@ int ssm_platform_entry(void) {
     if (next_time <= real_time) {
       ssm_tick(); // We're behind: catch up to reality
 
-      // FIXME: Update the scheduled GPIO
+      // Update the scheduled GPIO
+      ssm_time_t gpio_later = ssm_to_sv(gpio_output)->later_time;
+      if (gpio_later != SSM_NEVER)	
+	ssm_pio_schedule_output(gpio_later,
+				ssm_unmarshal(ssm_to_sv(gpio_output)->later_value));
 
     } else if (next_time == SSM_NEVER)
       sem_acquire_blocking(&ssm_tick_sem); // Sleep until an external event
