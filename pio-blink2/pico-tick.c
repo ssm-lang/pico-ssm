@@ -14,7 +14,7 @@
 #include <ssm-platform.h>
 
 #define INPUT_PIN_BASE 6
-#define INPUT_PIN_COUNT 1
+#define INPUT_PIN_COUNT 2
 #define OUTPUT_PIN_BASE 25
 #define OUTPUT_PIN_COUNT 1
 
@@ -58,7 +58,8 @@ static const char *ssm_exception_message[] = {
 
 void ssm_throw(ssm_error_t reason, const char *file, int line, const char *func) {
   printf("Threw error code %d at time: %016llx", reason, ssm_now());
-  printf("%s\n", ssm_exception_message[reason < SSM_PLATFORM_ERROR ? reason : 0]);
+  printf("%s\n", ssm_exception_message[reason < SSM_PLATFORM_ERROR ?
+				       reason : 0]);
   exit(reason);
 }
 
@@ -181,8 +182,22 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   
   pio_sm_config input_c = ssm_input_program_get_default_config(input_offset); 
   sm_config_set_in_pins(&input_c, input_pins_base);
-  sm_config_set_fifo_join(&input_c, PIO_FIFO_JOIN_RX); // 8-deep RX FIFO    
+  // sm_config_set_fifo_join(&input_c, PIO_FIFO_JOIN_RX); // 8-deep RX FIFO    
   pio_sm_init(INPUT_PIO, INPUT_SM, input_offset, &input_c);
+
+  // Patch the input program based on the number of input pins
+  
+  uint null_count = 32 - input_pins_count;
+  uint pin_in_instr = pio_encode_in(pio_pins, input_pins_count);
+  uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) : pio_encode_nop();
+
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0] = pin_in_instr;
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_2] = pin_in_instr;
+  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_2 + 1] = null_in_instr;
+
  
   // Enable the PIO input interrupt
   //
@@ -244,14 +259,16 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
 
   
 
-  // Initialize the output timer based on the current hardware counter value
+  // Initialize the input and output timers
+  // based on the current hardware counter value
   
   // FIXME: We'd like this to be even more precise since we don't know
   // the exact latency between reading the hardware counter
   // and starting the state machines
   
-  uint32_t lo = timer_hw->timelr;
-  pio_sm_put(OUTPUT_PIO, ALARM_SM, US_TO_PIO(lo));
+  uint32_t pio_count = US_TO_PIO(timer_hw->timelr);
+  pio_sm_put(OUTPUT_PIO, ALARM_SM, pio_count);
+  pio_sm_put(INPUT_PIO, INPUT_SM, pio_count);
 
   pio_set_sm_mask_enabled(OUTPUT_PIO, (1 << ALARM_SM) | (1 << GPIO_SM), true);
   pio_set_sm_mask_enabled(INPUT_PIO, 1 << INPUT_SM, true);  

@@ -45,13 +45,18 @@
 .define PUBLIC SSM_OUT_SET_IRQ 4
 
 .program ssm_input
+    pull noblock        ; OSR <- TX FIFO
+    mov y, osr          ; Y <- OSR (initialize the counter)
+pins_patch_0:
     in pins, 32         ; ISR <- read GPIO
+    in null, 32
     mov x, isr          ; X <- ISR
-    set y, 0            ; Y <- 0
 .wrap_target
 cmp:
     mov osr, y          ; OSR <- Y (back up counter)
-    in pins, 32         ; ISR <- read GPIO
+pins_patch_1:
+    in pins, 1         ; ISR <- read GPIO
+    in null, 32
     mov y, isr          ; Y <- ISR
     jmp x!=y, update    ; Compare prev with cur
     mov y, osr          ; Y <- OSR (restore counter)
@@ -59,7 +64,9 @@ resume_cmp:
     jmp y--, cmp        ; Y--, return to cmp
 ; cmp spillover block, in case Y was zero
     mov osr, y          ; OSR <- Y (back up counter)
-    in pins, 32         ; ISR <- read GPIO
+pins_patch_2:
+    in pins, 1         ; ISR <- read GPIO
+    in null, 32
     mov y, isr          ; Y <- ISR
     jmp x!=y, update    ; Compare prev with cur
     mov y, osr          ; Y <- OSR (restore counter)
@@ -76,8 +83,9 @@ update:
     jmp y--, cmp        ; Y--, always loops back to cmp
 .wrap
 
-
-
+.define public PINS_PATCH_0 pins_patch_0
+.define public PINS_PATCH_1 pins_patch_1
+.define public PINS_PATCH_2 pins_patch_2
 
 
 ;
