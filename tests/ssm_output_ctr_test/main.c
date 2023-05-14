@@ -8,8 +8,8 @@
 #include "mypio.pio.h"
 #include "ssm-output.pio.h"
 
-// #define CLK_MHZ 128u
-#define CLK_MHZ 125u
+#define CLK_MHZ 128u
+// #define CLK_MHZ 125u
 // #define CLK_MHZ 64u
 // #define CLK_MHZ 48u
 // #define CLK_MHZ 1u
@@ -65,6 +65,8 @@ int main(void) {
   // set_sys_clock_pll(1536000, 6, 2);
   // Set sys_clk to run at 64MHz
   // set_sys_clock_pll(1536, 6, 4);
+
+  set_sys_clock_pll(1536000000, 6, 2); // 128 MHz from the 12 MHz crystal
 
   // set_sys_clock_48mhz();
   //
