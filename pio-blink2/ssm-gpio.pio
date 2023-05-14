@@ -1,0 +1,68 @@
+; Internal IRQ number used to communicate between PIO state machines
+.define PUBLIC SSM_OUT_SET_IRQ 4
+
+
+;
+;
+; Interruptible output counter alarm (8 cycles per tick)
+;
+;
+
+.program ssm_output_alarm
+    pull noblock                ; side 0b1110   ; Pull initial counter from FIFO
+    mov y, osr                  ; side 0b1101   ; Initialize counter variable
+                                                ; Let block spill into resume block
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
+continue:
+    jmp resume                  ; side 0b0010   ; Goto decrement wraparound
+
+; Regs:
+;   X: target value
+;   Y: new target value (read from OSR)
+;   OSR: _ (also holds new target value)
+;   ISR: current counter (stashed from Y)
+new_target:
+    mov x, y                    ; side 0b0100   ; Set new target value
+    mov y, isr                  ; side 0b0100   ; Restore counter to Y
+    jmp resume                  ; side 0b0100   ; Goto decrement/wraparound
+
+; Regs:
+;   X: target value
+;   Y: current counter
+;   OSR: _ (clobbered when pulling from FIFO)
+;   ISR: _ (used to temporarily stash Y)
+.wrap_target
+wait_ctr:
+    pull noblock                ; side 0b0000   ; OSR <- FIFO else X
+    mov isr, y                  ; side 0b0000   ; Back up counter to ISR
+    mov y, osr                  ; side 0b0000   ; Store pulled value to Y for comparison
+    jmp x!=y,new_target         ; side 0b0000   ; Jump if new target was written to FIFO
+    mov y, isr                  ; side 0b0000   ; Restore counter to Y
+    jmp x!=y, continue          ; side 0b0000   ; Jump if counter not yet reached
+    irq nowait SSM_OUT_SET_IRQ  ; side 0b1000   ; Interrupt ssm_output_out
+resume:
+    jmp y--, wait_ctr           ; side 0b0000
+.wrap
+
+
+;
+;
+; Output program
+;
+; Read data to output from input FIFO (typically triggered from outside);
+; Wait for an interrupt from ssm_output_alarm
+; then transfer data to output pins
+;
+;
+
+.program ssm_output_gpio
+    in pins, 32
+    mov osr, isr                ; Initialize OSR to current GPIO state
+.wrap_target
+    wait 1 irq SSM_OUT_SET_IRQ  ; Wait for interrupt from ssm_output_alarm
+    out pins, 32                ; GPIO pins <- OSR
+.wrap
