@@ -44,7 +44,7 @@ static void free_mem(void *mem, size_t size) { free(mem); }
  ******************************/
 
 // The order of these needs to match up with the codes in enum ssm_error in ssm.h
-char *ssm_exception_message[] = {
+static const char *ssm_exception_message[] = {
     "Unforeseen internal error",
     "Tried to insert into full activation record queue",
     "Tried to insert into full event queue",
@@ -60,7 +60,7 @@ void ssm_throw(ssm_error_t reason, const char *file, int line, const char *func)
   printf("Threw error code %d at time: %llu\n", reason, ssm_now());
   printf("%s:%s:%d\n", file, func, line);
   printf("%s\n", ssm_exception_message[(reason < SSM_PLATFORM_ERROR) ? reason : 0]);
-  sleep_ms(1000);
+  sleep_ms(1000); // Allow the full error message to print
   exit(reason);
 }
 
@@ -93,7 +93,7 @@ static void timer_isr(void) {
 ssm_time_t get_real_time(void) {
   uint32_t lo = timer_hw->timelr;
   uint32_t hi = timer_hw->timehr;
-  return ( (ssm_time_t) hi << 32u ) | lo;
+  return ( (ssm_time_t) hi << 36u ) | (lo << 4); // Convert 1us time to ssm_time
 }
 
 /* Set the alarm time
@@ -101,9 +101,9 @@ ssm_time_t get_real_time(void) {
  * Note that this is only a 32-bit comparator so strange things
  * might happen with long delays
  */
-void set_alarm(ssm_time_t when)
+static inline void set_alarm(ssm_time_t when)
 {
-  timer_hw->alarm[ALARM_NUM] = (uint32_t) when;
+  timer_hw->alarm[ALARM_NUM] = when >> 4; // Convert ssm_time to 1 us resolution
 }
 
 /*
@@ -116,7 +116,7 @@ void initialize_alarm()
   hw_set_bits(&timer_hw->inte, 1u << ALARM_NUM);
   irq_set_exclusive_handler(ALARM_IRQ, timer_isr);
   irq_set_enabled(ALARM_IRQ, true);
-  set_alarm((ssm_time_t) ~0);   // Far enough in the future to be irrelevant
+  set_alarm(~0);            // Far enough in the future to be irrelevant
 }
 
 /******************************
@@ -138,7 +138,19 @@ void initialize_alarm()
 
 // Convert the 1us hardware counter to PIO counter values (16 MHz)
 #define US_TO_PIO(t) (~((uint32_t) ((t) << 4)))
-#define PIO_TO_US(t) ((uint64_t) (~(t) >> 4))
+
+// Convert an SSM time to a PIO counter value (drop MSBs)
+#define SSM_TO_PIO(t) (~((uint32_t) (t)))
+
+// Convert a PIO timer count to an SSM time
+static const ssm_time_t pio_to_ssm_time(uint32_t pio_count)
+{
+  // FIXME: handle edge cases
+  ssm_time_t result = (get_real_time() & ((((ssm_time_t) 1) << 32) - 1)) |
+    (ssm_time_t) (~pio_count);
+  return result;
+}
+
 
 // Number of address bits in the byte address; max 14
 #define PIO_RING_BUFFER_LOG2_SIZE 6
@@ -277,7 +289,7 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
 }
 
 static inline void
-ssm_pio_schedule_output(ssm_time_t pio_time, uint32_t value) {
+ssm_pio_schedule_output(ssm_time_t scheduled_time, uint32_t value) {
   // Send the new output value to the GPIO state machine
   pio_sm_put(OUTPUT_PIO, GPIO_SM, value);  // put value into TX FIFO
   __compiler_memory_barrier();
@@ -285,7 +297,7 @@ ssm_pio_schedule_output(ssm_time_t pio_time, uint32_t value) {
   pio_sm_exec(OUTPUT_PIO, GPIO_SM, pio_encode_pull(false, true));
 
   // Set the new alarm time
-  pio_sm_put(OUTPUT_PIO, ALARM_SM, US_TO_PIO(pio_time));
+  pio_sm_put(OUTPUT_PIO, ALARM_SM, SSM_TO_PIO(scheduled_time));
 }
 
 
@@ -332,7 +344,7 @@ int ssm_platform_entry(void) {
     if (ssm_to_sv(gpio_input)->later_time == SSM_NEVER &&
 	pio_ring_buffer_ptr != INPUT_DMA_WRITE_ADDR) {
       uint32_t gpio_input_value = pio_ring_buffer_ptr[0];
-      ssm_time_t gpio_input_time = PIO_TO_US(pio_ring_buffer_ptr[1]); // FIXME!
+      ssm_time_t gpio_input_time = pio_to_ssm_time(pio_ring_buffer_ptr[1]); // FIXME!
       if (pio_ring_buffer_top == (pio_ring_buffer_ptr += 2))
 	pio_ring_buffer_ptr = (uint32_t *) pio_ring_buffer;
 
