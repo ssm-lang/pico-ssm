@@ -13,9 +13,9 @@
 #include <ssm-internal.h>
 #include <ssm-platform.h>
 
-#define INPUT_PIN_BASE 6
+#define INPUT_PIN_BASE 4
 #define INPUT_PIN_COUNT 2
-#define OUTPUT_PIN_BASE 25
+#define OUTPUT_PIN_BASE 14
 #define OUTPUT_PIN_COUNT 1
 
 /******************************
@@ -182,21 +182,19 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   
   pio_sm_config input_c = ssm_input_program_get_default_config(input_offset); 
   sm_config_set_in_pins(&input_c, input_pins_base);
-  // sm_config_set_fifo_join(&input_c, PIO_FIFO_JOIN_RX); // 8-deep RX FIFO    
   pio_sm_init(INPUT_PIO, INPUT_SM, input_offset, &input_c);
 
   // Patch the input program based on the number of input pins
   
   uint null_count = 32 - input_pins_count;
   uint pin_in_instr = pio_encode_in(pio_pins, input_pins_count);
-  uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) : pio_encode_nop();
+  uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) :
+                                          pio_encode_nop();
 
   INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0] = pin_in_instr;
   INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
   INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
   INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_2] = pin_in_instr;
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_2 + 1] = null_in_instr;
 
  
   // Enable the PIO input interrupt
