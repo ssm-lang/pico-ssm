@@ -1,0 +1,48 @@
+// This is what the primitive probably should have been called
+ref v = new v
+
+us t =
+  t * 16
+
+debounce t in out =
+  let r = ref ()
+  loop
+    wait in
+    out <- deref in
+    after t, r <- ()
+    wait r
+
+toggle_width hi lo in width =
+  let wait_for_button_press _ =
+    while deref in == 0
+      wait in
+  loop
+    wait_for_button_press ()
+    width <- hi
+    wait_for_button_press ()
+    width <- lo
+
+
+emit_pwm period step width out =
+  let w = ref (deref width)
+  after period, out <- 1
+  loop
+    wait out
+
+    if deref width > deref w
+      w <- deref w + step
+    else
+      if deref width < deref w
+        w <- deref w - step
+
+    after deref w, out <- 0
+    wait out
+    after (period - deref w), out <- 1
+
+main input output =
+  let input_debounced = ref (deref input)
+      width = ref (us 570)
+
+  par debounce (us 10) input input_debounced
+      toggle_width (us 120) (us 570) input_debounced width
+      emit_pwm (us 1000) (us 50) width output
