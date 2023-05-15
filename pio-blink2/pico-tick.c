@@ -13,10 +13,21 @@
 #include <ssm-internal.h>
 #include <ssm-platform.h>
 
+#define LILYGO
+
+#ifdef LILYGO
+#define INPUT_PIN_BASE 6
+#define INPUT_PIN_COUNT 2
+#define OUTPUT_PIN_BASE 25
+#define OUTPUT_PIN_COUNT 1
+#endif
+
+#ifdef RP2040ZERO
 #define INPUT_PIN_BASE 4
 #define INPUT_PIN_COUNT 2
 #define OUTPUT_PIN_BASE 14
 #define OUTPUT_PIN_COUNT 1
+#endif
 
 /******************************
  * Memory allocation
@@ -91,9 +102,9 @@ static void timer_isr(void) {
  * to read the timer at the same time
  */
 ssm_time_t get_real_time(void) {
-  uint32_t lo = timer_hw->timelr;
-  uint32_t hi = timer_hw->timehr;
-  return ( (ssm_time_t) hi << 36u ) | (lo << 4); // Convert 1us time to ssm_time
+  uint32_t lo = timer_hw->timelr; // 0x4005400C
+  uint32_t hi = timer_hw->timehr; // 0x40054008
+  return (((uint64_t) hi << 32) | lo) << 4;
 }
 
 /* Set the alarm time
@@ -103,7 +114,7 @@ ssm_time_t get_real_time(void) {
  */
 static inline void set_alarm(ssm_time_t when)
 {
-  timer_hw->alarm[ALARM_NUM] = when >> 4; // Convert ssm_time to 1 us resolution
+  timer_hw->alarm[ALARM_NUM] = when >> 4; // Convert ssm_time to 1 us time
 }
 
 /*
@@ -145,8 +156,9 @@ void initialize_alarm()
 // Convert a PIO timer count to an SSM time
 static const ssm_time_t pio_to_ssm_time(uint32_t pio_count)
 {
-  // FIXME: handle edge cases
-  ssm_time_t result = (get_real_time() & ((((ssm_time_t) 1) << 32) - 1)) |
+  // FIXME: This is currently just using the hardware timer to fill in
+  // the top 32 bits of time, but this is sometimes a race
+  ssm_time_t result = (get_real_time() & ~((((ssm_time_t) 1) << 32) - 1)) |
     (ssm_time_t) (~pio_count);
   return result;
 }

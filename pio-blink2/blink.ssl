@@ -7,7 +7,7 @@ main a gpio =
   let timer = new ()
   after ms 2000, timer <- ()
   loop
-    after ms 100, gpio <- 1 - deref gpio
+    after ms 10, gpio <- 1 - deref gpio
     after ms 500, timer <- ()
     wait timer
     
