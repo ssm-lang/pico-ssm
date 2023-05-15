@@ -7,14 +7,14 @@
 ;
 ; Between iterations:
 ; - X holds previous GPIO value
-; - Y holds counter (decremented every 6 instructions)
+; - Y holds counter (decremented every 8 instructions)
 ; - OSR is used to back up Y between cmp and update
 ;
 ; This program is pipelined to increase the frequency at which the counter is
 ; updated (which also determines the granularity of timestamping).
 ;
 ; There are two phases of the pipeline. The cmp phase polls the GPIO pins,
-; and loops every 6 instructions when there are no changes on the GPIO pins.
+; and loops every 8 instructions when there are no changes on the GPIO pins.
 ; Thus, the cmp phase decrements the counter once every iteration.
 ;
 ; The update phase is triggered when changes are found on the GPIO pins, which
@@ -28,7 +28,7 @@
 ;
 ; Due to the fact that the update phase takes twice as long as the cmp phase,
 ; if the GPIO input rapidly changes twice, the second change will be delayed
-; by 6 instructions worth of time.
+; by 8 instructions worth of time.
 ;
 ; FIFO protocol: (gpio_in ; input_time)
 ;                --------- time ------->
@@ -42,48 +42,45 @@
 .define public SSM_INPUT_IRQ_NUM 0
 
 .program ssm_input
-    pull                ; OSR <- TX FIFO
-    mov y, osr          ; Y <- OSR (initialize the counter)
+.define IN_PINS 16
+.define NULL_PINS (32 - IN_PINS)
+
+    pull                ; Read initial counter from TX FIFO
+    mov y, osr          ; \ldots into Y
 pins_patch_0:
-    in pins, 32         ; ISR <- read GPIO
-    in null, 32
-    mov x, isr          ; X <- ISR
+    in pins, IN_PINS    ; Read initial GPIO pins state
+    in null, NULL_PINS  ; \ldots plus additional null values
+    mov x, isr          ; \ldots into X
+    nop                 ; Stall for 1 cycle
+
 .wrap_target
 cmp:
-    mov osr, y          ; OSR <- Y (back up counter)
+    jmp y--, decr1      ; Decrement Y
+decr1:
+    mov osr, y          ; Back up counter from Y
 pins_patch_1:
-    in pins, 1         ; ISR <- read GPIO
-    in null, 32
-    mov y, isr          ; Y <- ISR
-    jmp x!=y, update    ; Compare prev with cur
-    mov y, osr          ; Y <- OSR (restore counter)
-resume_cmp:
-    jmp y--, cmp        ; Y--, return to cmp
-; cmp spillover block, in case Y was zero
-    mov osr, y          ; OSR <- Y (back up counter)
-pins_patch_2:
-    in pins, 1         ; ISR <- read GPIO
-    in null, 32
-    mov y, isr          ; Y <- ISR
-    jmp x!=y, update    ; Compare prev with cur
-    mov y, osr          ; Y <- OSR (restore counter)
-    jmp y--, cmp        ; Y--, resume cmp
-; We don't need to worry about spillover here since Y-- can never be zero twice
-update:
-    mov x, isr          ; X <- ISR (set prev to cur)
-    push noblock        ; FIFO <- ISR
-    mov isr, osr        ; ISR <- OSR (currently storing counter)
-    push noblock        ; FIFO <- ISR
-    irq nowait SSM_INPUT_IRQ_NUM ; notify CPU
-    mov y, osr          ; Y <- OSR (restore counter)
-    jmp y--, resume_cmp ; Y--, goto Y-- in cmp phase so Y is decremented again
-    jmp y--, cmp        ; Y--, always loops back to cmp
+    in pins, IN_PINS    ; Read GPIO pins state
+    in pins, NULL_PINS  ; \ldots plus additional null values
+    mov y, isr          ; \ldots into Y
+    jmp x!=y, event     ; Jump if state changed
+    mov y, osr          ; Restore counter to Y
+    jmp cmp             ; Goto cmp
+
+event:
+    mov x, isr          ; Set prev to cur value
+    push noblock        ; \ldots and push to RX FIFO
+    mov isr, osr        ; Move counter to ISR
+    push noblock        ; \ldots and push to RX FIFO
+    irq 0               ; Notify CPU of new event
+    mov y, osr          ; Restore counter to Y
+    jmp y--, decr2      ; Decrement Y
+decr2:
+    nop [1]             ; Stall for 2 cycles
+    jmp cmp             ; Goto cmp
 .wrap
 
 .define public PINS_PATCH_0 pins_patch_0
 .define public PINS_PATCH_1 pins_patch_1
-.define public PINS_PATCH_2 pins_patch_2
-
 
 ; This is a simpler program, but we probably won't use it
 ;
@@ -130,7 +127,7 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
     if (pin_base + pin_count > 32)
         // Only support up to 32 input pins at once
         return -1;
-    
+
     if (!pio_can_add_program(pio, &ssm_input_program))
         // Can't add program
         return -1;
@@ -167,8 +164,6 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
     pio->instr_mem[offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
     pio->instr_mem[offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
     pio->instr_mem[offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
-    pio->instr_mem[offset + ssm_input_PINS_PATCH_2] = pin_in_instr;
-    pio->instr_mem[offset + ssm_input_PINS_PATCH_2 + 1] = null_in_instr;
 
     // Set the state machine running
     pio_sm_set_enabled(pio, sm, true);
