@@ -1,9 +1,11 @@
 // This is what the primitive probably should have been called
 ref v = new v
 
+// Convert from microseconds to ticks (PLATFORM-SPECIFIC)
 us t =
   t * 16
 
+// After receiving event on in, relay to out, but cooldown for t
 debounce t in out =
   let r = ref ()
   loop
@@ -12,6 +14,7 @@ debounce t in out =
     after t, r <- ()
     wait r
 
+// Upon each button press, toggle width between hi and lo values
 toggle_width hi lo in width =
   let wait_for_button_press _ =
     while deref in == 0
@@ -22,7 +25,8 @@ toggle_width hi lo in width =
     wait_for_button_press ()
     width <- lo
 
-
+// Emit pulse signal on out channel with given width and period.
+// If width is changed, slowly grow the emitted pulse width one step at a time.
 emit_pwm period step width out =
   let w = ref (deref width)
   after period, out <- 1
@@ -39,7 +43,8 @@ emit_pwm period step width out =
     wait out
     after (period - deref w), out <- 1
 
-main input output =
+// Expects input and output be int references mapped to GPIO pins
+main (input: &Int) (output: &Int) =
   let input_debounced = ref (deref input)
       width = ref (us 570)
 
