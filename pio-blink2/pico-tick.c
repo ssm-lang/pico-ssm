@@ -44,7 +44,7 @@ static void free_mem(void *mem, size_t size) { free(mem); }
  ******************************/
 
 // The order of these needs to match up with the codes in enum ssm_error in ssm.h
-static const char *ssm_exception_message[] = {
+char *ssm_exception_message[] = {
     "Unforeseen internal error",
     "Tried to insert into full activation record queue",
     "Tried to insert into full event queue",
@@ -52,14 +52,15 @@ static const char *ssm_exception_message[] = {
     "Tried to exceed available recursion depth",
     "Invalid time, e.g., scheduled delayed assignment at an earlier time",
     "Not yet ready to perform the requested action",
-    "Specified invalid time, e.g., scheduled assignment at an earlier time",
+    "Specified invalid time, e.g., scheduled assignment before \"now\"",
     "Invalid memory layout, e.g., using a pointer where int was expected"
 }; 
 
 void ssm_throw(ssm_error_t reason, const char *file, int line, const char *func) {
-  printf("Threw error code %d at time: %016llx", reason, ssm_now());
-  printf("%s\n", ssm_exception_message[reason < SSM_PLATFORM_ERROR ?
-				       reason : 0]);
+  printf("Threw error code %d at time: %llu\n", reason, ssm_now());
+  printf("%s:%s:%d\n", file, func, line);
+  printf("%s\n", ssm_exception_message[(reason < SSM_PLATFORM_ERROR) ? reason : 0]);
+  sleep_ms(1000);
   exit(reason);
 }
 
@@ -153,6 +154,9 @@ uint32_t *pio_ring_buffer_top =
 
 // DMA channel for managing the ring buffer
 int pio_input_dma_channel;
+
+// The DMA channel's next write address
+#define INPUT_DMA_WRITE_ADDR ((uint32_t *) dma_hw->ch[pio_input_dma_channel].write_addr)
 
 static void input_fifo_isr(void) {
   pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
@@ -310,9 +314,9 @@ int ssm_platform_entry(void) {
   // Prepare the sslang program to start
   extern ssm_act_t *__enter_main(ssm_act_t *, ssm_priority_t, ssm_depth_t,
                                  ssm_value_t *, ssm_value_t *);
-  ssm_value_t nothing0 = ssm_new_sv(ssm_marshal(0));
+  ssm_value_t gpio_input = ssm_new_sv(ssm_marshal(0));
   ssm_value_t gpio_output = ssm_new_sv(ssm_marshal(0));
-  ssm_value_t main_argv[2] = {nothing0, gpio_output};
+  ssm_value_t main_argv[2] = { gpio_input, gpio_output };
   
   ssm_activate(__enter_main(&ssm_top_parent, SSM_ROOT_PRIORITY, SSM_ROOT_DEPTH,
                             main_argv, NULL));
@@ -322,18 +326,38 @@ int ssm_platform_entry(void) {
 
   // Run the program or sleep if we're too early
   for (;;) {
-    ssm_time_t real_time = get_real_time();
-    ssm_time_t next_time = ssm_next_event_time();
+    
+    // If there is no unconsumed GPIO input event and there is one in the ring buffer,
+    // schedule the update of the GPIO input variable
+    if (ssm_to_sv(gpio_input)->later_time == SSM_NEVER &&
+	pio_ring_buffer_ptr != INPUT_DMA_WRITE_ADDR) {
+      uint32_t gpio_input_value = pio_ring_buffer_ptr[0];
+      ssm_time_t gpio_input_time = PIO_TO_US(pio_ring_buffer_ptr[1]); // FIXME!
+      if (pio_ring_buffer_top == (pio_ring_buffer_ptr += 2))
+	pio_ring_buffer_ptr = (uint32_t *) pio_ring_buffer;
 
-    printf("real %llu next %llu\n", real_time, next_time);
+      printf("in @ %llu : %8lx\n", gpio_input_time, gpio_input_value);
+      
+      ssm_sv_later_unsafe(ssm_to_sv(gpio_input),
+			  gpio_input_time,
+			  ssm_marshal(gpio_input_value));
 
+    }
+
+#if 0
     while ( pio_ring_buffer_ptr != (uint32_t *) dma_hw->ch[pio_input_dma_channel].write_addr) {
       printf("in @ %llu : %8lx\n", PIO_TO_US(pio_ring_buffer_ptr[1]), pio_ring_buffer_ptr[0]);
       if (pio_ring_buffer_top == (pio_ring_buffer_ptr += 2))
 	pio_ring_buffer_ptr = (uint32_t *) pio_ring_buffer;
     }
-
+#endif
+    
     // printf("DMA %lx\n", (uint32_t) dma_hw->ch[pio_input_dma_channel].write_addr - (uint32_t) pio_ring_buffer);
+
+    ssm_time_t real_time = get_real_time();
+    ssm_time_t next_time = ssm_next_event_time();
+
+    printf("real %llu next %llu\n", real_time, next_time);
 
     __compiler_memory_barrier();
 
