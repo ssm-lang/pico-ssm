@@ -44,14 +44,12 @@
 .program ssm_input
 .define IN_PINS 16
 .define NULL_PINS (32 - IN_PINS)
-
     pull                ; Read initial counter from TX FIFO
     mov y, osr          ; \ldots into Y
 pins_patch_0:
     in pins, IN_PINS    ; Read initial GPIO pins state
     in null, NULL_PINS  ; \ldots plus additional null values
     mov x, isr          ; \ldots into X
-    nop                 ; Stall for 1 cycle
 
 .wrap_target
 cmp:
@@ -73,10 +71,7 @@ event:
     push noblock        ; \ldots and push to RX FIFO
     irq 0               ; Notify CPU of new event
     mov y, osr          ; Restore counter to Y
-    jmp y--, decr2      ; Decrement Y
-decr2:
-    nop [1]             ; Stall for 2 cycles
-    jmp cmp             ; Goto cmp
+    jmp y--, cmp [3]    ; Decrement Y, stall for 2 cycles
 .wrap
 
 .define public PINS_PATCH_0 pins_patch_0
