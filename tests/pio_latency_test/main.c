@@ -1,6 +1,9 @@
 #include <hardware/clocks.h>
 #include <hardware/gpio.h>
 #include <hardware/pio.h>
+#include <hardware/pio_instructions.h>
+#include <hardware/timer.h>
+#include <pico/platform.h>
 #include <pico/sem.h>
 #include <pico/stdlib.h>
 #include <stdio.h>
@@ -11,10 +14,9 @@
 
 uint32_t clk_sys_hz = 125000000; // Default is (usually) 125MHz (?)
 
-#define START_PIN 6
-#define END_PIN 7
 #define PIO_PIN1 8
 #define PIO_PIN2 9
+#define DBG_PIN 10
 
 int main(void) {
   set_sys_clock_pll(1536000000, 6, 2); // 128 MHz from the 12 MHz crystal
@@ -33,42 +35,45 @@ int main(void) {
   int sm1 = mypio_init(pio0, PIO_PIN1);
   int sm2 = mypio_init(pio0, PIO_PIN2);
   uint32_t sm_mask = 1 << sm1 | 1 << sm2;
+  __compiler_membar();
   printf("Force sm mask: %d\n", sm_mask);
 
-  gpio_init(START_PIN);
-  gpio_set_dir(START_PIN, GPIO_OUT);
-  gpio_init(END_PIN);
-  gpio_set_dir(END_PIN, GPIO_OUT);
-
-  // Sleep for 1 second before doing everything
+  gpio_init(DBG_PIN);
+  gpio_set_dir(DBG_PIN, GPIO_OUT);
 
   uint32_t time_us, init_ctr;
 
-  gpio_put(START_PIN, true);
-  do {
-    break;
-    time_us = timer_hw->timerawl;
+  while (1) {
 
-    init_ctr = ~(time_us * CLK_MHZ / 8);
+    __compiler_membar();
+    gpio_put(DBG_PIN, true);
+    __compiler_membar();
 
-    pio_sm_put(pio0, sm1, init_ctr);
+    do {
+      time_us = timer_hw->timerawl;
 
-    pio_sm_put(pio0, sm2, init_ctr);
+      init_ctr = ~(time_us * (CLK_MHZ / 8));
 
-    pio_set_sm_mask_enabled(pio0, sm_mask, true);
-  } while (0);
-  gpio_put(END_PIN, true);
+      pio_sm_put(pio0, sm1, init_ctr);
 
-  // Read lower 32 bits of system clock again
-  uint32_t time2_us = timer_hw->timerawl;
-  uint32_t time3_us = timer_hw->timerawl;
+      pio_sm_put(pio0, sm2, init_ctr);
 
-  printf("\nCompleted initialization\n");
-  printf("    First timer read (us):  %u\n", time_us);
-  printf("    Counter:                %u\n", init_ctr);
-  printf("    Second timer read (us): %u\n", time2_us);
-  printf("    Third timer read (us):  %u\n", time3_us);
-  printf("    second us - first us:   %u\n", time2_us - time_us);
+      pio_set_sm_mask_enabled(pio0, sm_mask, true);
+    } while (0);
+    __compiler_membar();
+    gpio_put(DBG_PIN, false);
+    __compiler_membar();
+
+    busy_wait_at_least_cycles(100);
+    busy_wait_at_least_cycles(16);
+
+    pio_set_sm_mask_enabled(pio0, sm_mask, false);
+    pio_sm_exec(pio0, sm1, pio_encode_set(pio_pins, 0));
+    pio_restart_sm_mask(pio0, sm_mask);
+
+    // Adjusted so that the loop is exactly 100 instructions
+    busy_wait_at_least_cycles(16 + 9);
+  }
 
   return 0;
 }

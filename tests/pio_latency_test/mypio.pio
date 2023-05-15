@@ -2,7 +2,8 @@
 .program mypio
     pull noblock
 .wrap_target
-    set pins, 1
+    set pins, 1 [15]
+    set pins, 0 [15]
 .wrap
 
 % c-sdk {

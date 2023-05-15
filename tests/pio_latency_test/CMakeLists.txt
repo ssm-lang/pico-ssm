@@ -12,6 +12,7 @@ target_link_libraries(${test_name}
     pico_stdlib
     hardware_pio
     hardware_clocks
+    cmsis_core
 )
 
 pico_enable_stdio_usb(${test_name} 0)
