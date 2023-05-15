@@ -50,3 +50,7 @@ Note that latency goes up to 5313ns when I don't pre-compute the sm mask.
 | Enable PIO SMs  | 4188ns (238.81kHz)  | 3--4us     | 863ns |
 
 PIO SMs set GPIO pins around 375ns before END GPIO pin
+
+### Consecutive timer reads
+
+Consecutive timer reads take about 1us (i.e., consecutive reads of the lower bits are 1 apart)
