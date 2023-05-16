@@ -14,6 +14,8 @@
 #include <ssm-platform.h>
 
 #define LILYGO
+// #define RP2040ZERO
+// #define PICO
 
 #ifdef LILYGO
 #define INPUT_PIN_BASE 6
@@ -26,6 +28,13 @@
 #define INPUT_PIN_BASE 4
 #define INPUT_PIN_COUNT 2
 #define OUTPUT_PIN_BASE 14
+#define OUTPUT_PIN_COUNT 1
+#endif
+
+#ifdef PICO
+#define INPUT_PIN_BASE 15
+#define INPUT_PIN_COUNT 1
+#define OUTPUT_PIN_BASE PICO_DEFAULT_LED_PIN
 #define OUTPUT_PIN_COUNT 1
 #endif
 
