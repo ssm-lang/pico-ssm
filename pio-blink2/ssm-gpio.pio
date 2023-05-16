@@ -39,22 +39,23 @@
 ; a 2-flipflop synchronizer, which adds 2 cycles of latency. This is less than
 ; the 6-cycle clock period of this input program.
 
+; Interrupt used to communicate the presence of new input data on
+; the input SM's RX FIFO
 .define public SSM_INPUT_IRQ_NUM 0
 
 ; Internal IRQ number used to communicate between output PIO state machines
 .define PUBLIC SSM_OUT_SET_IRQ 4
 
+
 .program ssm_input
 .define IN_PINS 16
 .define NULL_PINS (32 - IN_PINS)
-
     pull                ; Read initial counter from TX FIFO
     mov y, osr          ; \ldots into Y
 pins_patch_0:
     in pins, IN_PINS    ; Read initial GPIO pins state
     in null, NULL_PINS  ; \ldots plus additional null values
     mov x, isr          ; \ldots into X
-    nop                 ; Stall for 1 cycle
 
 .wrap_target
 cmp:
@@ -76,14 +77,14 @@ event:
     push noblock        ; \ldots and push to RX FIFO
     irq 0               ; Notify CPU of new event
     mov y, osr          ; Restore counter to Y
-    jmp y--, decr2      ; Decrement Y
-decr2:
-    nop [1]             ; Stall for 2 cycles
-    jmp cmp             ; Goto cmp
+    jmp y--, cmp [3]    ; Decrement Y, stall for 2 cycles
 .wrap
 
 .define public PINS_PATCH_0 pins_patch_0
 .define public PINS_PATCH_1 pins_patch_1
+
+
+
 
 ;
 ;
@@ -91,46 +92,21 @@ decr2:
 ;
 ;
 
+; Interruptible output counter (8 cycles per tick)
 .program ssm_output_alarm
-    pull noblock                ; side 0b1110   ; Pull initial counter from FIFO
-    mov y, osr                  ; side 0b1101   ; Initialize counter variable
-                                                ; Let block spill into resume block
-; Regs:
-;   X: target value
-;   Y: current counter
-;   OSR: _ (clobbered when pulling from FIFO)
-;   ISR: _ (used to temporarily stash Y)
-continue:
-    jmp resume                  ; side 0b0010   ; Goto decrement wraparound
-
-; Regs:
-;   X: target value
-;   Y: new target value (read from OSR)
-;   OSR: _ (also holds new target value)
-;   ISR: current counter (stashed from Y)
-new_target:
-    mov x, y                    ; side 0b0100   ; Set new target value
-    mov y, isr                  ; side 0b0100   ; Restore counter to Y
-    jmp resume                  ; side 0b0100   ; Goto decrement/wraparound
-
-; Regs:
-;   X: target value
-;   Y: current counter
-;   OSR: _ (clobbered when pulling from FIFO)
-;   ISR: _ (used to temporarily stash Y)
+    pull noblock                ; Pull initial counter from FIFO
+    mov y, osr                  ; Initialize counter variable
+                                ; Let block spill into resume block
+cont:
+    nop
 .wrap_target
-wait_ctr:
-    pull noblock                ; side 0b0000   ; OSR <- FIFO else X
-    mov isr, y                  ; side 0b0000   ; Back up counter to ISR
-    mov y, osr                  ; side 0b0000   ; Store pulled value to Y for comparison
-    jmp x!=y,new_target         ; side 0b0000   ; Jump if new target was written to FIFO
-    mov y, isr                  ; side 0b0000   ; Restore counter to Y
-    jmp x!=y, continue          ; side 0b0000   ; Jump if counter not yet reached
-    irq nowait SSM_OUT_SET_IRQ  ; side 0b1000   ; Interrupt ssm_output_out
-resume:
-    jmp y--, wait_ctr           ; side 0b0000
+    jmp y--, check [3]
+check:
+    pull noblock                ; OSR <- FIFO else X
+    mov x, osr                  ; Overwrite X if new
+    jmp x!=y, cont              ; Jump if counter not yet reached
+    irq nowait SSM_OUT_SET_IRQ  ; Interrupt ssm_output_out
 .wrap
-
 
 ;
 ;
@@ -142,10 +118,12 @@ resume:
 ;
 ;
 
+
+; Latching output emitter (interrupt-driven)
 .program ssm_output_gpio
     in pins, 32
     mov osr, isr                ; Initialize OSR to current GPIO state
 .wrap_target
-    wait 1 irq SSM_OUT_SET_IRQ  ; Wait for interrupt from ssm_output_alarm
+    wait 1 irq SSM_OUT_SET_IRQ  ; Wait for interrupt from ssm_output_ctr
     out pins, 32                ; GPIO pins <- OSR
 .wrap
