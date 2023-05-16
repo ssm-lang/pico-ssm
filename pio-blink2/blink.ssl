@@ -17,6 +17,7 @@ button in led leddelay debounce =
       wait in
     after leddelay, led <- 1 - deref led
     after debounce, timer <- ()
+    wait timer
     while deref in % 2 != 0
       wait in    
 
