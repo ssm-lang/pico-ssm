@@ -1,0 +1,35 @@
+; Basic program that toggles a GPIO pin every time it receives an IRQ
+; NOTE that SSM_OUT_SET_IRQ is defined as 4
+.program mypio
+.wrap_target
+    wait 1 irq 4
+    set pins, 1
+    wait 1 irq 4
+    set pins, 0
+.wrap
+
+% c-sdk {
+static inline int mypio_init(PIO pio, uint pin) {
+    if (!pio_can_add_program(pio, &mypio_program))
+        // No available space for program
+        return -1;
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No available state machines to execute program
+        return -1;
+
+    uint offset = pio_add_program(pio, &mypio_program);
+
+    pio_sm_config c = mypio_program_get_default_config(offset);
+
+    // This program just assigns to a single pin.
+    sm_config_set_set_pins(&c, pin, 1);
+    pio_gpio_init(pio, pin);
+    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, 1u << pin);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    return sm;
+}
+%}
