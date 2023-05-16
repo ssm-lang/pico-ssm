@@ -134,18 +134,20 @@ void initialize_alarm()
  * PIO Input/Output system
  ******************************/
 
-// PIO, state machine, and interrupts related to the input system
+// PIO used for both input and ouput state machines
+#define SSM_PIO pio0
+
+// State machines and interrupts related to the input system
 // The PIO, SM, and IRQ numbers must be consistent
-#define INPUT_PIO pio0
+
 #define INPUT_SM 0
-#define INPUT_PIO_IRQ_ENABLE_SOURCE pio_set_irq0_source_enabled
+#define SSM_PIO_IRQ_ENABLE_SOURCE pio_set_irq0_source_enabled
 #define INPUT_IRQ PIO0_IRQ_0
 #define INPUT_IRQ_SOURCE PIO_INTR_SM0_LSB
 
-// PIO and state machine related to the output system
-#define OUTPUT_PIO pio1
-#define ALARM_SM 0
-#define GPIO_SM 1
+// State machines related to the output system
+#define ALARM_SM 1
+#define GPIO_SM 2
 
 // Convert the 1us hardware counter to PIO counter values (16 MHz)
 #define US_TO_PIO(t) (~((uint32_t) ((t) << 4)))
@@ -183,7 +185,7 @@ int pio_input_dma_channel;
 #define INPUT_DMA_WRITE_ADDR ((uint32_t *) dma_hw->ch[pio_input_dma_channel].write_addr)
 
 static void input_fifo_isr(void) {
-  pio_interrupt_clear(INPUT_PIO, SSM_INPUT_IRQ_NUM);
+  pio_interrupt_clear(SSM_PIO, SSM_INPUT_IRQ_NUM);
   // printf(".");
   sem_release(&ssm_tick_sem); // Wake up the tick loop
 }
@@ -194,23 +196,23 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
 {
   // Configure the input pins to be read by the PIO
   for (uint i = 0 ; i < input_pins_count ; i++)
-    pio_gpio_init(INPUT_PIO, input_pins_base + i); // FIXME: necessary?
-  pio_sm_set_consecutive_pindirs(INPUT_PIO, INPUT_SM,
+    pio_gpio_init(SSM_PIO, input_pins_base + i); // FIXME: necessary?
+  pio_sm_set_consecutive_pindirs(SSM_PIO, INPUT_SM,
 				 input_pins_base, input_pins_count, false);
   
   // Configure the output pins to be driven by the PIO
   for (uint i = 0 ; i < output_pins_count ; i++)
-    pio_gpio_init(OUTPUT_PIO, output_pins_base + i);
-  pio_sm_set_consecutive_pindirs(OUTPUT_PIO, GPIO_SM,
+    pio_gpio_init(SSM_PIO, output_pins_base + i);
+  pio_sm_set_consecutive_pindirs(SSM_PIO, GPIO_SM,
 				 output_pins_base, output_pins_count, true);
 
   // Upload the input program
-  pio_sm_claim(INPUT_PIO, INPUT_SM);
-  uint input_offset = pio_add_program(INPUT_PIO, &ssm_input_program);
+  pio_sm_claim(SSM_PIO, INPUT_SM);
+  uint input_offset = pio_add_program(SSM_PIO, &ssm_input_program);
   
   pio_sm_config input_c = ssm_input_program_get_default_config(input_offset); 
   sm_config_set_in_pins(&input_c, input_pins_base);
-  pio_sm_init(INPUT_PIO, INPUT_SM, input_offset, &input_c);
+  pio_sm_init(SSM_PIO, INPUT_SM, input_offset, &input_c);
 
   // Patch the input program based on the number of input pins
   
@@ -219,10 +221,10 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) :
                                           pio_encode_nop();
 
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0] = pin_in_instr;
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
-  INPUT_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
+  SSM_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0] = pin_in_instr;
+  SSM_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_0 + 1] = null_in_instr;
+  SSM_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
+  SSM_PIO->instr_mem[input_offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
 
  
   // Enable the PIO input interrupt
@@ -231,7 +233,7 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   // processorland, and the function to enable a PIO IRQ depends
   // on the IRQ in question
   irq_set_exclusive_handler(INPUT_IRQ, input_fifo_isr);
-  INPUT_PIO_IRQ_ENABLE_SOURCE(INPUT_PIO, INPUT_IRQ_SOURCE, true);
+  SSM_PIO_IRQ_ENABLE_SOURCE(SSM_PIO, INPUT_IRQ_SOURCE, true);
   irq_set_enabled(INPUT_IRQ, true);
 
   // Initialize the DMA channel that will transfer data from
@@ -246,13 +248,13 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   channel_config_set_read_increment(&c, false); // Don't increment FIFO reads
   channel_config_set_write_increment(&c, true); // Increment buffer writes
   channel_config_set_dreq(&c,
-       pio_get_dreq(INPUT_PIO, INPUT_SM, false)); // Rate from RX FIFO
+       pio_get_dreq(SSM_PIO, INPUT_SM, false)); // Rate from RX FIFO
   channel_config_set_ring(&c, true, PIO_RING_BUFFER_LOG2_SIZE); // Ring buffer
 
   dma_channel_configure(pio_input_dma_channel,
 			&c,
 			pio_ring_buffer, // Write to ring buffer
-			&INPUT_PIO->rxf[INPUT_SM], // read from PIO RX FIFO
+			&SSM_PIO->rxf[INPUT_SM], // read from PIO RX FIFO
 			(~0), // Count: make it big. FIXME: restart
 			true);
   
@@ -265,22 +267,22 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   
   
   // Upload the output alarm program
-  pio_sm_claim(OUTPUT_PIO, ALARM_SM);
-  uint alarm_offset = pio_add_program(OUTPUT_PIO, &ssm_output_alarm_program);
+  pio_sm_claim(SSM_PIO, ALARM_SM);
+  uint alarm_offset = pio_add_program(SSM_PIO, &ssm_output_alarm_program);
   
   pio_sm_config alarm_c =
     ssm_output_alarm_program_get_default_config(alarm_offset);
   // FIXME: more configuration stuff?
-  pio_sm_init(OUTPUT_PIO, ALARM_SM, alarm_offset, &alarm_c);
+  pio_sm_init(SSM_PIO, ALARM_SM, alarm_offset, &alarm_c);
 
   // Upload the gpio output program
-  pio_sm_claim(OUTPUT_PIO, GPIO_SM);
-  uint gpio_offset = pio_add_program(OUTPUT_PIO, &ssm_output_gpio_program);
+  pio_sm_claim(SSM_PIO, GPIO_SM);
+  uint gpio_offset = pio_add_program(SSM_PIO, &ssm_output_gpio_program);
   
   pio_sm_config gpio_c =
     ssm_output_gpio_program_get_default_config(gpio_offset);
   sm_config_set_out_pins(&gpio_c, output_pins_base, output_pins_count);
-  pio_sm_init(OUTPUT_PIO, GPIO_SM, gpio_offset, &gpio_c);
+  pio_sm_init(SSM_PIO, GPIO_SM, gpio_offset, &gpio_c);
 
 
   
@@ -293,23 +295,22 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   // and starting the state machines
   
   uint32_t pio_count = US_TO_PIO(timer_hw->timelr);
-  pio_sm_put(OUTPUT_PIO, ALARM_SM, pio_count);
-  pio_sm_put(INPUT_PIO, INPUT_SM, pio_count);
+  pio_sm_put(SSM_PIO, ALARM_SM, pio_count);
+  pio_sm_put(SSM_PIO, INPUT_SM, pio_count);
 
-  pio_set_sm_mask_enabled(OUTPUT_PIO, (1 << ALARM_SM) | (1 << GPIO_SM), true);
-  pio_set_sm_mask_enabled(INPUT_PIO, 1 << INPUT_SM, true);  
+  pio_set_sm_mask_enabled(SSM_PIO, (1 << INPUT_SM) | (1 << ALARM_SM) | (1 << GPIO_SM), true);
 }
 
 static inline void
 ssm_pio_schedule_output(ssm_time_t scheduled_time, uint32_t value) {
   // Send the new output value to the GPIO state machine
-  pio_sm_put(OUTPUT_PIO, GPIO_SM, value);  // put value into TX FIFO
+  pio_sm_put(SSM_PIO, GPIO_SM, value);  // put value into TX FIFO
   __compiler_memory_barrier();
   // execute pull block, i.e., OSR <- TX FIFO
-  pio_sm_exec(OUTPUT_PIO, GPIO_SM, pio_encode_pull(false, true));
+  pio_sm_exec(SSM_PIO, GPIO_SM, pio_encode_pull(false, true));
 
   // Set the new alarm time
-  pio_sm_put(OUTPUT_PIO, ALARM_SM, SSM_TO_PIO(scheduled_time));
+  pio_sm_put(SSM_PIO, ALARM_SM, SSM_TO_PIO(scheduled_time));
 }
 
 
