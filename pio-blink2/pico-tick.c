@@ -301,7 +301,7 @@ ssm_pio_gpio_init(uint input_pins_base, uint input_pins_count,
   // the exact latency between reading the hardware counter
   // and starting the state machines
 
-  uint32_t pio_count = US_TO_PIO(timer_hw->timelr);
+  uint32_t pio_count = US_TO_PIO(timer_hw->timerawl);
   pio_sm_put(SSM_PIO, ALARM_SM, pio_count);
   pio_sm_put(SSM_PIO, INPUT_SM, pio_count);
 
