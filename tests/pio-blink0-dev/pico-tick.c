@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <pico/sem.h>
 #include <pico/time.h>
 #include <hardware/timer.h>

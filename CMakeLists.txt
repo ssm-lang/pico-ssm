@@ -23,6 +23,3 @@ add_subdirectory(tests)
 
 # Where we write sslang programs
 add_subdirectory(programs)
-
-# Where our main application
-add_subdirectory(src)

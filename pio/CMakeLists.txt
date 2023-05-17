@@ -10,16 +10,20 @@ pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-input.pio)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
 pico_generate_pio_header(ssm-pio-header ${CMAKE_CURRENT_LIST_DIR}/ssm-timer.pio)
 
-add_library(ssm-pio)
-target_sources(ssm-pio
-    PRIVATE ssm-pio.c
+add_library(ssm-rp2040)
+target_sources(ssm-rp2040
+    PRIVATE ssm-mem.c
+    PRIVATE ssm-throw.c
+    PRIVATE ssm-rp2040.c
+    PRIVATE ssm-rp2040-internal.h
 )
 
-target_include_directories(ssm-pio PUBLIC include)
+target_include_directories(ssm-rp2040 PUBLIC include)
 
-target_link_libraries(ssm-pio
+target_link_libraries(ssm-rp2040
     pico_stdlib
     hardware_pio
     hardware_clocks
     ssm-pio-header
+    ssm-runtime
 )
