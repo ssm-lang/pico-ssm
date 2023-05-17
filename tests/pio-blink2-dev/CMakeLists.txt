@@ -1,9 +1,12 @@
 add_executable(pio-blink2)
 
+set(ssl_name blink.ssl)
+set(ssl_out ${ssl_name}.c)
+
 target_sources(pio-blink2
   PRIVATE main.c
   PRIVATE pico-tick.c
-  PRIVATE blink.c
+  PRIVATE ${ssl_out}
   )
 
 target_compile_options(pio-blink2 PRIVATE -Wall)
@@ -28,8 +31,8 @@ pico_enable_stdio_uart(pio-blink2 0)
 pico_add_extra_outputs(pio-blink2)
 
 add_custom_Command(
-  DEPENDS ${CMAKE_SOURCE_DIR}/pio-blink2/blink.ssl
-  COMMAND sslc ${CMAKE_SOURCE_DIR}/pio-blink2/blink.ssl > ${CMAKE_CURRENT_BINARY_DIR}/blink.c
-  COMMENT "Compiling blink.ssl to blink.c with sslc"
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/blink.c
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ssl_name}
+  COMMAND sslc ${CMAKE_CURRENT_SOURCE_DIR}/${ssl_name} > ${CMAKE_CURRENT_BINARY_DIR}/${ssl_out}
+  COMMENT "Runnling sslc to generate blink.c"
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ssl_out}
 )

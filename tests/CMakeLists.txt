@@ -2,7 +2,7 @@
 # will be in its own subdirectory under tests/, ending with suffix _test.
 
 # Yes, globbing is terrible practice in CMake but I don't care.
-file(GLOB test_dirs *_test)
+file(GLOB test_dirs *_test *-dev)
 
 foreach(test_dir ${test_dirs})
     add_subdirectory(${test_dir})
