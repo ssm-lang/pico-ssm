@@ -1,7 +1,9 @@
-#include "hardware/pio.h"
-#include "ssm-rp2040-internal.h"
-
 #include <hardware/gpio.h>
+#include <hardware/pio.h>
+
+#include "ssm-input.pio.h"
+#include "ssm-output.pio.h"
+#include "ssm-rp2040-internal.h"
 
 #define SSM_PIO pio0
 #define INPUT_SM 0
@@ -21,8 +23,7 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   pio_sm_claim(SSM_PIO, ALARM_SM);
   pio_sm_claim(SSM_PIO, BUFFER_SM);
 
-  ssm_pio_input_init(SSM_PIO, INPUT_SM, input_base, input_count);
-  ssm_pio_output_alarm_init(SSM_PIO, ALARM_SM);
-  ssm_pio_output_buffer_init(SSM_PIO, BUFFER_SM, output_base, output_count);
-
+  ssm_input_init(SSM_PIO, INPUT_SM, input_base, input_count);
+  ssm_output_alarm_init(SSM_PIO, ALARM_SM);
+  ssm_output_buffer_init(SSM_PIO, BUFFER_SM, output_base, output_count);
 }
