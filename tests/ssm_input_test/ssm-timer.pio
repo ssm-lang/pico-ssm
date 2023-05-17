@@ -1,0 +1,68 @@
+; A timer implemented in PIO.
+;
+; This program continuously decrements a counter every 8 cycles, and pushes the
+; counter value to its FIFO. When the FIFO fills up, subsequent pushes will have
+; no effect on the FIFO, so those values are dropped.
+;
+; From the CPU's perspective, the FIFO is normally filled with 4 stale values,
+; so to read a fresh (recent) counter value, the CPU need only read the FIFO
+; register 5 times.
+;
+; TODO: use ssm-ctr.h
+.program ssm_pio_timer
+.wrap_target
+    jmp x--, next [5]
+next:
+    in x, 32
+    push noblock
+.wrap
+
+% c-sdk {
+static inline int ssm_pio_timer_program_start(PIO pio) {
+    if (!pio_can_add_program(pio, &ssm_pio_timer_program))
+        // Can't add program
+        return -1;
+
+    uint offset = pio_add_program(pio, &ssm_pio_timer_program);
+
+    int sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+        // No state machines available at pio
+        return -1;
+
+    pio_sm_config c = ssm_pio_timer_program_get_default_config(offset);
+
+    // Ensure FIFO is only 4-deep
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_NONE);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Initialize counter to 0
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 0));
+
+    return sm;
+}
+
+// TODO: return ticks value, defined in ssm-ctr.h.
+static inline uint32_t ssm_pio_timer_read(PIO pio, uint sm) {
+    /*
+    volatile uint32_t *rxf = &pio->rxf[sm];
+    (void) *rxf;
+    (void) *rxf;
+    (void) *rxf;
+    (void) *rxf;
+    */
+
+    // This should reliably generate 4 reads, since the pio->rxf field is indeed
+    // declared a volatile uint32_t.
+    pio_sm_get(pio, sm);
+    pio_sm_get(pio, sm);
+    pio_sm_get(pio, sm);
+    pio_sm_get(pio, sm);
+
+    // Should we clear RXUNDER flag in fdebug here? There's no need to.
+
+    return pio_sm_get_blocking(pio, sm);
+}
+%}

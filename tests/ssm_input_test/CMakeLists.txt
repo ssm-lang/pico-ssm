@@ -6,11 +6,13 @@ target_sources(${test_name}
     PRIVATE ssm_input_test.c
 )
 
+pico_generate_pio_header(${test_name} ${CMAKE_CURRENT_LIST_DIR}/ssm-input.pio)
+pico_generate_pio_header(${test_name} ${CMAKE_CURRENT_LIST_DIR}/ssm-timer.pio)
+
 target_link_libraries(${test_name}
     pico_stdlib
     hardware_pio
     hardware_clocks
-    ssm-pio-header
 )
 
 pico_enable_stdio_usb(${test_name} 1)

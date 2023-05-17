@@ -7,12 +7,12 @@ target_sources(${test_name}
 )
 
 pico_generate_pio_header(${test_name} ${CMAKE_CURRENT_LIST_DIR}/mypio.pio)
+pico_generate_pio_header(${test_name} ${CMAKE_CURRENT_LIST_DIR}/ssm-output.pio)
 
 target_link_libraries(${test_name}
     pico_stdlib
     hardware_pio
     hardware_clocks
-    ssm-pio-header
 )
 
 pico_enable_stdio_usb(${test_name} 0)
