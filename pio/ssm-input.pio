@@ -1,39 +1,25 @@
-; Configuration:
+; SSM input capture
 ;
-; Each output state machine can read from/write to up to 32 GPIO pins at once,
-; using the in and out programs. These pins must be consecutive.
-;
-; Input program
-;
-; Between iterations:
-; - X holds previous GPIO value
+; Register usage:
+; - X holds the previous value
 ; - Y holds counter (decremented every 8 instructions)
-; - OSR is used to back up Y between cmp and update
-;
-; This program is pipelined to increase the frequency at which the counter is
-; updated (which also determines the granularity of timestamping).
+; - ISR is clobbered every time we read from GPIO pins
+; - OSR backs up counter when Y is used for storing fresh GPIO pin read
 ;
 ; There are two phases of the pipeline. The cmp phase polls the GPIO pins,
 ; and loops every 8 instructions when there are no changes on the GPIO pins.
 ; Thus, the cmp phase decrements the counter once every iteration.
 ;
-; The update phase is triggered when changes are found on the GPIO pins, which
-; writes the GPIO input and then the current counter to the FIFO. It takes 12
+; The event phase is triggered when changes are found on the GPIO pins, which
+; writes the GPIO input and then the current counter to the FIFO. It takes 16
 ; instructions to go through the cmp then update phase, so it decrements the
 ; counter twice before returning to cmp.
 ;
-; Because jmp y--, <DEST> will fall throuh when y is zero, we add an additional
-; "spillover" block for the cmp phase which does the exact same thing as cmp
-; (we can't naively jump back because the instructions will be out of phase).
-;
-; Due to the fact that the update phase takes twice as long as the cmp phase,
-; if the GPIO input rapidly changes twice, the second change will be delayed
-; by 8 instructions worth of time.
+; Because the cmp+update phases take twice as long as the cmp phase alone, if
+; the GPIO input rapidly changes twice, the second event is delayed by 1 count.
 ;
 ; FIFO protocol: (gpio_in ; input_time)
 ;                --------- time ------->
-;
-; TODO: determine IRQ number (and set it up??)
 ;
 ; NOTE: The SDK documentation (3.5.6.3) notes that GPIO pins are equipped with
 ; a 2-flipflop synchronizer, which adds 2 cycles of latency. This is less than
@@ -42,7 +28,7 @@
 .define public SSM_INPUT_IRQ_NUM 0
 
 .program ssm_input
-.define IN_PINS 16
+.define IN_PINS 2
 .define NULL_PINS (32 - IN_PINS)
     pull                ; Read initial counter from TX FIFO
     mov y, osr          ; \ldots into Y
@@ -77,80 +63,19 @@ event:
 .define public PINS_PATCH_0 pins_patch_0
 .define public PINS_PATCH_1 pins_patch_1
 
-; This is a simpler program, but we probably won't use it
-;
-; .program ssm_input
-;     in pins, 32
-;     mov y, isr
-; update:
-;     mov x, isr          ; X <- ISR (set prev to cur)
-;     push noblock        ; FIFO <- ISR
-;     irq nowait SSM_INPUT_IRQ_NUM [2]; notify CPU, also wait 2 cycles
-; .wrap_target
-;     in pins, 32         ; ISR <- read GPIO
-;     mov y, isr          ; Y <- ISR
-;     jmp x!=y, update [5]   ; Compare prev with cur, wait 5 cycles if no jmp
-; .wrap
-
 % c-sdk {
-/*! \brief Setup SSM input program, and enable the state machine.
- *
- * This function handles all PIO configuration for the caller, including:
- * - load the program into the specified PIO instance
- * - claim a state machine from the specified PIO instance
- * - configure GPIO pins for input
- * - set clock rate (TODO)
- * - configure interrupt handler (TODO)
- *
- * For some reason, the PIO API does not allow setting the pin count, only the
- * pin base. So for now, we require that pin_count be set to 32.
- *
- * \param pio           The PIO instance; either \ref pio0 or \ref pio1
- * \param pin_base      The first input pin to use for SSM input
- * \param pin_count     The number of consecutive pins use as SSM input
- * \return              State machine where program is installed; negative if error
- */
+static inline void ssm_input_init(PIO pio, uint sm, uint pin_base, uint pin_count) {
+    check_pio_param(pio);
+    check_sm_param(sm);
+    valid_params_if(PIO, pin_count > 0);
+    // NOTE: we may want to relax this and allow the pin counts to wrap around.
+    valid_params_if(PIO, pin_base + pin_count <- NUM_BANK0_GPIOS);
 
-#define SSM_INPUT_IRQ_NUM 0
-
-static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count) {
-
-    if (pin_count == 0)
-        //Pin count needs to be higher than 0, otherwise this won't work!
-        return -1;
-
-    if (pin_base + pin_count > 32)
-        // Only support up to 32 input pins at once
-        return -1;
-
-    if (!pio_can_add_program(pio, &ssm_input_program))
-        // Can't add program
-        return -1;
-
-    uint offset = pio_add_program(pio, &ssm_input_program);
-
-    int sm = pio_claim_unused_sm(pio, false);
-    if (sm < 0)
-        // No state machines available at pio
-        return -1;
-
-    pio_sm_config c = ssm_input_program_get_default_config(offset);
-
-    // Set GPIO input pins according to parameters
-    sm_config_set_in_pins(&c, pin_base);
-
-    // Note that pio_gpio_init() is apparently not needed for reading GPIO input
-    // but the examples do this so we shall do this too
-    for (int i = 0; i < pin_count; i++)
-        pio_gpio_init(pio, pin_base + i);
-
-    // On our state machine, set the pins' direction to input
+    // Set pins direction to in
     pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, false);
 
-    // Load our configuration, and jump to the start of the program
-    pio_sm_init(pio, sm, offset, &c);
-
-    //Set the in instructions
+    // Load program, and patch it according to the number of input pins
+    uint offset = pio_add_program(pio, &ssm_input_program);
     uint null_count = 32 - pin_count;
     uint pin_in_instr = pio_encode_in(pio_pins, pin_count);
     uint null_in_instr = (null_count > 0) ? pio_encode_in(pio_null, null_count) : pio_encode_nop();
@@ -160,9 +85,11 @@ static inline int ssm_input_program_start(PIO pio, uint pin_base, uint pin_count
     pio->instr_mem[offset + ssm_input_PINS_PATCH_1] = pin_in_instr;
     pio->instr_mem[offset + ssm_input_PINS_PATCH_1 + 1] = null_in_instr;
 
-    // Set the state machine running
-    pio_sm_set_enabled(pio, sm, true);
+    // Configure the state machine
+    pio_sm_config c = ssm_input_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin_base);
 
-    return sm;
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
 }
 %}

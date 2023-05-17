@@ -1,8 +1,8 @@
 ; Internal IRQ number used to communicate between PIO state machines
-.define PUBLIC SSM_OUT_SET_IRQ 4
+.define public SSM_OUT_SET_IRQ 4
 
 ; Interruptible output counter (8 cycles per tick)
-.program ssm_output_ctr
+.program ssm_output_alarm
     pull noblock                ; Pull initial counter from FIFO
     mov y, osr                  ; Initialize counter variable
                                 ; Let block spill into resume block
@@ -14,35 +14,23 @@ check:
     pull noblock                ; OSR <- FIFO else X
     mov x, osr                  ; Overwrite X if new
     jmp x!=y, cont              ; Jump if counter not yet reached
-    irq nowait SSM_OUT_SET_IRQ  ; Interrupt ssm_output_out
+    irq nowait SSM_OUT_SET_IRQ  ; Interrupt output buffer
 .wrap
 
 % c-sdk {
-static inline int ssm_output_ctr_init(PIO pio) {
-    if (!pio_can_add_program(pio, &ssm_output_ctr_program))
-        // No available space for program
-        return -1;
+static inline void ssm_output_alarm_init(PIO pio, uint sm) {
+    check_pio_param(pio);
+    check_sm_param(sm);
 
-    int sm = pio_claim_unused_sm(pio, false);
-    if (sm < 0)
-        // No available state machines to execute program
-        return -1;
+    uint offset = pio_add_program(pio, &ssm_output_alarm_program);
 
-    uint offset = pio_add_program(pio, &ssm_output_ctr_program);
-
-    pio_sm_config c = ssm_output_ctr_program_get_default_config(offset);
+    pio_sm_config c = ssm_output_alarm_program_get_default_config(offset);
     pio_sm_init(pio, sm, offset, &c);
-
-    return sm;
-}
-
-static inline void ssm_output_set_ctr(PIO pio, uint sm, uint32_t ctr) {
-    pio_sm_put(pio, sm, ctr);
 }
 %}
 
 ; Latching output emitter (interrupt-driven)
-.program ssm_output_out
+.program ssm_output_buffer
     in pins, 32
     mov osr, isr                ; Initialize OSR to current GPIO state
 .wrap_target
@@ -51,40 +39,28 @@ static inline void ssm_output_set_ctr(PIO pio, uint sm, uint32_t ctr) {
 .wrap
 
 % c-sdk {
-static inline int ssm_output_out_init(PIO pio, uint32_t pin_mask) {
-    if (!pio_can_add_program(pio, &ssm_output_out_program))
-        // No available space for program
-        return -1;
+static inline void ssm_output_buffer_init(PIO pio, uint sm, uint pin_base, uint pin_count) {
+    check_pio_param(pio);
+    check_sm_param(sm);
+    valid_params_if(PIO, pin_count > 0);
+    // NOTE: we may want to relax this and allow the pin counts to wrap around.
+    valid_params_if(PIO, pin_base + pin_count <- NUM_BANK0_GPIOS);
 
-    int sm = pio_claim_unused_sm(pio, false);
-    if (sm < 0)
-        // No available state machines to execute program
-        return -1;
+    // Configure the output pins to be driven by the PIO
+    for (uint i = 0 ; i < pin_count; i++)
+        pio_gpio_init(pio, pin_base + i);
 
-    uint offset = pio_add_program(pio, &ssm_output_out_program);
+    // Set pins direction to out
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, false);
 
-    pio_sm_config c = ssm_output_out_program_get_default_config(offset);
+    // Load program
+    uint offset = pio_add_program(pio, &ssm_output_buffer_program);
 
-    // We're addressing GPIO pins in a 0-indexed fashion
-    sm_config_set_out_pins(&c, 0, 32);
-
-    // Configure output pins to be driven by PIO device
-    for (int pin_idx = 0; pin_idx < 32; pin_idx++)
-        if ((0x1 << pin_idx) & pin_mask)
-            pio_gpio_init(pio, pin_idx);
-
-    // For all pins in pin_mask, set the direction to output
-    pio_sm_set_pindirs_with_mask(pio, sm, 0xffffffff, pin_mask);
+    // Configure state machine
+    pio_sm_config c = ssm_output_buffer_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, pin_base, pin_count);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
-
-    return sm;
-}
-
-static inline void ssm_output_put(PIO pio, uint sm, uint32_t value) {
-    pio_sm_put(pio, sm, value);  // put value into TX FIFO
-    __compiler_memory_barrier();
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // execute pull block, i.e., OSR <- TX FIFO
 }
 %}

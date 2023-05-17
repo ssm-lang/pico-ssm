@@ -14,6 +14,7 @@ add_library(ssm-rp2040)
 target_sources(ssm-rp2040
     PRIVATE ssm-mem.c
     PRIVATE ssm-throw.c
+    PRIVATE ssm-io.c
     PRIVATE ssm-rp2040.c
     PRIVATE ssm-rp2040-internal.h
 )

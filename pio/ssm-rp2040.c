@@ -7,6 +7,7 @@
 #include <hardware/pio.h>
 #include <hardware/timer.h>
 
+/*
 // Use pio0 device by default
 PIO pio = pio0;
 
@@ -61,3 +62,4 @@ void ssm_pio_schedule_output(uint64_t time_ns, uint32_t value_mask) {
   ssm_output_set_ctr(pio, sm_ctr, ns_to_ctr(time_ns));
   ssm_output_put(pio, sm_out, value_mask);
 }
+*/
