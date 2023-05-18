@@ -35,7 +35,9 @@ uint32_t *pio_ring_buffer_top =
 
 // DMA channel for managing the ring buffer
 int pio_input_dma_channel;
+int pio_input_control_dma_channel;
 dma_channel_config pio_input_dma_config;
+dma_channel_config pio_input_control_dma_config;
 
 // The DMA channel's next write address
 #define INPUT_DMA_WRITE_ADDR                                                   \
@@ -50,8 +52,10 @@ static void input_fifo_isr(void) {
 
 static inline void setup_dma(void) {
   pio_input_dma_channel = dma_claim_unused_channel(true);
-
   pio_input_dma_config = dma_channel_get_default_config(pio_input_dma_channel);
+
+  pio_input_control_dma_channel = dma_claim_unused_channel(true);
+  pio_input_control_dma_config = dma_channel_get_default_config(pio_input_control_dma_channel);
 
   channel_config_set_transfer_data_size(&pio_input_dma_config, DMA_SIZE_32);
   channel_config_set_read_increment(&pio_input_dma_config, false);
@@ -60,12 +64,25 @@ static inline void setup_dma(void) {
                           pio_get_dreq(SSM_PIO, INPUT_SM, false));
   channel_config_set_ring(&pio_input_dma_config, true,
                           PIO_RING_BUFFER_LOG2_SIZE);
+  channel_config_set_chain_to(&pio_input_dma_config, pio_input_control_dma_channel);
 
   dma_channel_configure(pio_input_dma_channel, &pio_input_dma_config,
                         pio_ring_buffer,         // Write to ring buffer
                         &SSM_PIO->rxf[INPUT_SM], // read from PIO RX FIFO
-                        (~0), // Count: make it big. FIXME: restart
-                        true);
+                        (~0), // Count: make it big.
+                        false);
+
+  channel_config_set_transfer_data_size(&pio_input_control_dma_config, DMA_SIZE_32);
+  channel_config_set_read_increment(&pio_input_control_dma_config, false);
+  channel_config_set_write_increment(&pio_input_control_dma_config, false);
+
+  dma_channel_configure(pio_input_control_dma_channel, &pio_input_control_dma_config,
+                        &dma_hw->ch[pio_input_dma_channel].al2_write_addr_trig, //Write to the write address, but also trigger
+                        &dma_hw->ch[pio_input_dma_channel].write_addr, //Read from the write address 
+                        1,
+                        false);
+  
+  dma_channel_start(pio_input_dma_channel);
 }
 
 /*** IRQ ***/
