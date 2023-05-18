@@ -82,3 +82,8 @@ int ssm_platform_entry(void) {
 
   return 0;
 }
+
+int main(void) {
+  ssm_platform_entry();
+  return 0;
+}
