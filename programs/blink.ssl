@@ -1,3 +1,13 @@
+$$$
+#include <hardware/gpio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+
 // Convert milliseconds to quanta
 ms t = t * 16000
 us t = t * 16
@@ -20,9 +30,13 @@ button in led leddelay debounce =
     while deref in % 2 != 0
       wait in
 
-main gin gout =
+main _ _ =
+  let (gin, gout) = rp2040_io_init (15, 1) (25, 1)
+
+  input_set_pullup 15
   let timer = new ()
   after ms 2000, timer <- ()
+
   wait timer
   par blink gout (ms 500) (ms 10)
       button gin gout (ms 10) (ms 5)

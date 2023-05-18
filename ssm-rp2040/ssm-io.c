@@ -123,6 +123,9 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   assert(!already_called);
   already_called = true;
 
+  valid_params_if(PIO, input_base + input_count <= NUM_BANK0_GPIOS);
+  valid_params_if(PIO, output_base + output_count <= NUM_BANK0_GPIOS);
+
   // Claim state machines
   pio_sm_claim(SSM_PIO, INPUT_SM);
   pio_sm_claim(SSM_PIO, ALARM_SM);
@@ -130,9 +133,15 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
 
   uint sm_mask = 0;
 
+  *input_out = ssm_new_sv(ssm_marshal(0));
+  *output_out = ssm_new_sv(ssm_marshal(0));
+
   if (input_count > 0) {
-    *input_out = gpio_input_var = ssm_new_sv(ssm_marshal(gpio_get(input_base)));
+    gpio_input_var = *input_out;
     ssm_dup(gpio_input_var);
+
+    uint32_t gpio_init = (gpio_get_all() >> input_base) & ((1u << input_count) - 1);
+    ssm_to_sv(gpio_input_var)->value = ssm_marshal(gpio_init);
 
     setup_irq();
     setup_dma();
@@ -141,7 +150,9 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   }
 
   if (output_count > 0) {
-    *output_out = gpio_output_var = ssm_new_sv(ssm_marshal(0));
+    gpio_output_var = *output_out;
+    ssm_dup(gpio_output_var);
+
     ssm_output_alarm_init(SSM_PIO, ALARM_SM);
     ssm_output_buffer_init(SSM_PIO, BUFFER_SM, output_base, output_count);
     sm_mask |= 1 << BUFFER_SM | 1 << ALARM_SM;
@@ -249,8 +260,27 @@ void ssm_rp2040_forward_output(void) {
   }
 }
 
+/*** sslang config ***/
+
 ssm_value_t rp2040_io_init(ssm_value_t input, ssm_value_t output) {
-  // FIXME: write this. It should be callable from sslang programs and return
-  // a tuple containing the externally-mapped scheduled variables.
-  return ssm_marshal(0);
+  // extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+
+  uint input_base = ssm_unmarshal(ssm_adt_field(input, 0)),
+       input_count = ssm_unmarshal(ssm_adt_field(input, 1)),
+       output_base = ssm_unmarshal(ssm_adt_field(output, 0)),
+       output_count = ssm_unmarshal(ssm_adt_field(output, 1));
+
+  ssm_drop(input);
+  ssm_drop(output);
+
+  ssm_value_t input_var, output_var;
+
+  ssm_rp2040_io_init(input_base, input_count, output_base, output_count,
+                     &input_var, &output_var);
+
+  ssm_value_t ret = ssm_new_adt(2, 0);
+  ssm_adt_field(ret, 0) = input_var;
+  ssm_adt_field(ret, 1) = output_var;
+
+  return ret;
 }

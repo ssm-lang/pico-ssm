@@ -15,7 +15,4 @@ void ssm_rp2040_alarm_init(void) {
   hw_set_bits(&timer_hw->inte, 1u << ALARM_NUM);
   irq_set_exclusive_handler(ALARM_IRQ, timer_isr);
   irq_set_enabled(ALARM_IRQ, true);
-
-  // set_alarm(~0); // Far enough in the future to be irrelevant
-  // FIXME: why was this necessary?
 }

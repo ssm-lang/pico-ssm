@@ -1,36 +1,6 @@
 #include <pico/sem.h>
 
-#include <hardware/gpio.h> // FIXME: remove this!
-
 #include "ssm-rp2040-internal.h"
-
-// Hardware pin mappings.
-// FIXME: get rid of these!
-
-// #define LILYGO
-// #define RP2040ZERO
-#define PICO
-
-#ifdef LILYGO
-#define INPUT_PIN_BASE 6
-#define INPUT_PIN_COUNT 2
-#define OUTPUT_PIN_BASE 25
-#define OUTPUT_PIN_COUNT 1
-#endif
-
-#ifdef RP2040ZERO
-#define INPUT_PIN_BASE 4
-#define INPUT_PIN_COUNT 2
-#define OUTPUT_PIN_BASE 14
-#define OUTPUT_PIN_COUNT 1
-#endif
-
-#ifdef PICO
-#define INPUT_PIN_BASE 15
-#define INPUT_PIN_COUNT 1
-#define OUTPUT_PIN_BASE PICO_DEFAULT_LED_PIN
-#define OUTPUT_PIN_COUNT 1
-#endif
 
 semaphore_t ssm_tick_sem;
 
@@ -42,22 +12,20 @@ int ssm_platform_entry(void) {
   ssm_rp2040_mem_init();
   ssm_rp2040_alarm_init();
 
-  // FIXME: remove this!
-  ssm_value_t main_arg1, main_arg2;
-  gpio_set_pulls(INPUT_PIN_BASE, true, false);
-  ssm_rp2040_io_init(INPUT_PIN_BASE, INPUT_PIN_COUNT, OUTPUT_PIN_BASE, OUTPUT_PIN_COUNT, &main_arg1, &main_arg2);
-
   // Prepare the sslang program to start
   extern ssm_act_t *__enter_main(ssm_act_t *, ssm_priority_t, ssm_depth_t,
                                  ssm_value_t *, ssm_value_t *);
-  // ssm_value_t main_arg1 = ssm_new_sv(ssm_marshal(0));
-  // ssm_value_t main_arg2 = ssm_new_sv(ssm_marshal(0));
+
+  // TODO: These arguments aren't even necessary anymore. We just keep them
+  // around as dummy SVs because that's what sslang's main function expects.
+  ssm_value_t main_arg1 = ssm_new_sv(ssm_marshal(0));
+  ssm_value_t main_arg2 = ssm_new_sv(ssm_marshal(0));
   ssm_value_t main_argv[2] = {main_arg1, main_arg2};
 
   ssm_activate(__enter_main(&ssm_top_parent, SSM_ROOT_PRIORITY, SSM_ROOT_DEPTH,
                             main_argv, NULL));
 
-  ssm_tick(); // gpio_pins configured here
+  ssm_tick(); // GPIO pins configured by sslang program
 
   for (;;) {
     /* We must read real time before polling input to avoid this race condition:
