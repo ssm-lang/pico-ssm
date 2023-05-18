@@ -8,6 +8,9 @@
 #include "ssm-output.pio.h"
 #include "ssm-rp2040-internal.h"
 
+// In 16MHz
+#define CTR_INIT_SKEW_OFFSET 1024
+
 #define SSM_PIO pio0
 #define INPUT_SM 0
 
@@ -163,7 +166,7 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
     // compiler doesn't reorder anything past this point.
     __compiler_memory_barrier();
 
-    uint32_t ctr_init = ~(timer_hw->timerawl << 4);
+    uint32_t ctr_init = ~((timer_hw->timerawl << 4) + CTR_INIT_SKEW_OFFSET);
 
     pio_sm_put(SSM_PIO, INPUT_SM, ctr_init);
     pio_sm_put(SSM_PIO, ALARM_SM, ctr_init);
