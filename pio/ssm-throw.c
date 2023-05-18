@@ -2,6 +2,7 @@
 #include <ssm-internal.h>
 #include <ssm-platform.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /******************************
  * Exception Handling

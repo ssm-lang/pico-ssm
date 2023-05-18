@@ -115,8 +115,7 @@ static inline void setup_pio(uint input_base, uint input_count,
 
 /*** Entry point ***/
 
-size_t input_vars_len = 0, output_vars_len = 0;
-ssm_value_t *input_vars = NULL, *output_vars = NULL;
+ssm_value_t input_var = ssm_marshal(0), gpio_output_var = ssm_marshal(0);
 
 void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
                         uint output_count, ssm_value_t *input_out,
@@ -135,20 +134,8 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   uint sm_mask = 0;
 
   if (input_count > 0) {
-    input_vars_len = input_count;
-    input_vars = malloc(sizeof(ssm_value_t) * input_vars_len);
-
-    // NOTE: reading the GPIO pin here like this is slightly prone to races
-    if (input_count == 1) {
-      *input_out = *input_vars = ssm_new_sv(ssm_marshal(gpio_get(input_base)));
-    } else {
-      *input_out = ssm_new_adt(input_count, 0);
-      for (int i = 0; i < input_count; i++) {
-        ssm_value_t sv = ssm_new_sv(ssm_marshal(gpio_get(input_base + i)));
-        input_vars[i] = sv;
-        ssm_adt_field(*input_out, i);
-      }
-    }
+    *input_out = input_var = ssm_new_sv(ssm_marshal(gpio_get(input_base)));
+    ssm_dup(input_var);
 
     setup_irq();
     setup_dma();
@@ -157,23 +144,10 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   }
 
   if (output_count > 0) {
-    output_vars_len = output_count;
-    output_vars = malloc(sizeof(ssm_value_t) * output_vars_len);
-
-    if (output_count == 1) {
-      *output_out = *output_vars = ssm_new_sv(ssm_marshal(0));
-    } else {
-      *output_out = ssm_new_adt(output_count, 0);
-      for (int i = 0; i < output_count; i++) {
-        ssm_value_t sv = ssm_new_sv(ssm_marshal(0));
-        output_vars[i] = sv;
-        ssm_adt_field(*output_out, i);
-      }
-    }
-
+    *output_out = gpio_output_var =
+        ssm_new_sv(ssm_marshal(gpio_get(output_base)));
     ssm_output_alarm_init(SSM_PIO, ALARM_SM);
     ssm_output_buffer_init(SSM_PIO, BUFFER_SM, output_base, output_count);
-
     sm_mask |= 1 << BUFFER_SM | 1 << ALARM_SM;
   }
 
@@ -196,17 +170,28 @@ int ssm_rp2040_try_input(ssm_time_t next_time) {
   return 0;
 }
 
+void ssm_pio_schedule_output(pio_ctr_t t, uint32_t v) {
+  pio_sm_put(SSM_PIO, BUFFER_SM, v);
+  __compiler_memory_barrier();
+
+  pio_sm_exec(SSM_PIO, BUFFER_SM, pio_encode_pull(false, true));
+  pio_sm_put(SSM_PIO, ALARM_SM, t);
+}
+
 void ssm_rp2040_forward_output(void) {
-  if (!output_vars)
+  if (!ssm_on_heap(gpio_output_var))
+    // Output was never initialized, we are not using output
     return;
 
-  for (int i = 0; i < output_vars_len; i++) {
-    // FIXME: Stephen's technique does not work for multiple output vars
-    // scheduled for different times!
-  }
+  ssm_time_t later_time = ssm_to_sv(gpio_output_var)->later_time;
+  if (later_time != SSM_NEVER)
+    ssm_pio_schedule_output(
+        time_to_ctr(later_time),
+        ssm_unmarshal(ssm_to_sv(gpio_output_var)->later_value));
 }
 
 ssm_value_t rp2040_io_init(ssm_value_t input, ssm_value_t output) {
-  // FIXME: write this. It should be callable from sslang programs.
+  // FIXME: write this. It should be callable from sslang programs and return
+  // a tuple containing the externally-mapped scheduled variables.
   return ssm_marshal(0);
 }
