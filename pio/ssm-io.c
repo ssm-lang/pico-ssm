@@ -23,12 +23,6 @@
 uint8_t pio_ring_buffer[PIO_RING_BUFFER_SIZE]
     __attribute((aligned(PIO_RING_BUFFER_SIZE)));
 
-/*
-uint32_t *pio_ring_buffer_ptr = (uint32_t *) pio_ring_buffer;
-uint32_t *pio_ring_buffer_top =
-(uint32_t *) (pio_ring_buffer + PIO_RING_BUFFER_SIZE);
-*/
-
 // State machines related to the output system
 #define ALARM_SM 1
 #define BUFFER_SM 2
@@ -38,10 +32,6 @@ int pio_input_dma_channel;
 int pio_input_control_dma_channel;
 dma_channel_config pio_input_dma_config;
 dma_channel_config pio_input_control_dma_config;
-
-// The DMA channel's next write address
-#define INPUT_DMA_WRITE_ADDR                                                   \
-  ((uint32_t *)dma_hw->ch[pio_input_dma_channel].write_addr)
 
 static void input_fifo_isr(void) {
   pio_interrupt_clear(SSM_PIO, SSM_INPUT_IRQ_NUM);
@@ -169,12 +159,48 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   }
 }
 
+typedef struct pio_input_packet {
+  uint32_t val;
+  uint32_t ctr;
+} pio_input_t;
+
+pio_input_t *pio_rb_cur = (pio_input_t *)pio_ring_buffer;
+
+const pio_input_t *pio_rb_top =
+    (pio_input_t *)(pio_ring_buffer + PIO_RING_BUFFER_SIZE);
+
+// The DMA channel's next write address
+#define INPUT_DMA_WRITE_ADDR                                                   \
+  ((pio_input_t *)dma_hw->ch[pio_input_dma_channel].write_addr)
+
 int ssm_rp2040_try_input(ssm_time_t next_time) {
   if (!ssm_on_heap(gpio_input_var))
+    // Input was never initialized, we are not using input
     return 0;
 
-  // FIXME: write this
-  return 0;
+  if (pio_rb_cur == INPUT_DMA_WRITE_ADDR)
+    // No new input
+    return 0;
+
+  uint32_t val = pio_rb_cur[0].val, ctr = pio_rb_cur[0].ctr;
+
+  // TODO: this is a rather expensive check because it involves reading the
+  // timer. We should be able to avoid it unless there's wraparound.
+  ssm_time_t input_time = ctr_to_time(ctr);
+
+  if (input_time > next_time)
+    // Still catching up to real-time, not ready for input yet; keep it buffered
+    return 0;
+
+  // Advance pio_rb_cur
+  if (++pio_rb_cur >= pio_rb_top)
+    // Wrap it around
+    pio_rb_cur = (pio_input_t *)pio_ring_buffer;
+
+  // Schedule the event
+  ssm_sv_later_unsafe(ssm_to_sv(gpio_input_var), input_time, ssm_marshal(val));
+
+  return 1;
 }
 
 void ssm_pio_schedule_output(pio_ctr_t t, uint32_t v) {

@@ -72,8 +72,10 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
                         uint output_count, ssm_value_t *input_out,
                         ssm_value_t *output_out);
 
+// Poll for input, and schedule it if ready; returns non-zero if scheduled.
 int ssm_rp2040_try_input(ssm_time_t next_time);
 
+// Check output variable and forward any scheduled assignment to PIO.
 void ssm_rp2040_forward_output(void);
 
 #endif /* ifndef SSM_RP2040_INTERNAL_H */
