@@ -19,6 +19,10 @@
 #define PIO_RING_BUFFER_LOG2_SIZE 6
 #define PIO_RING_BUFFER_SIZE (1 << PIO_RING_BUFFER_LOG2_SIZE)
 
+// How if scheduled output is within this margin, it is considered too late
+// Units: ssm_time_t
+#define PIO_SCHED_OUTPUT_MARGIN 32
+
 // PIO input ring buffer; all its lower address bits should be 0
 uint8_t pio_ring_buffer[PIO_RING_BUFFER_SIZE]
     __attribute((aligned(PIO_RING_BUFFER_SIZE)));
@@ -207,8 +211,24 @@ void ssm_pio_schedule_output(pio_ctr_t t, uint32_t v) {
   pio_sm_put(SSM_PIO, BUFFER_SM, v);
   __compiler_memory_barrier();
 
-  pio_sm_exec(SSM_PIO, BUFFER_SM, pio_encode_pull(false, true));
+  pio_sm_exec(SSM_PIO, BUFFER_SM,
+              pio_encode_pull(false, true) /* pull block */);
+
   pio_sm_put(SSM_PIO, ALARM_SM, t);
+}
+
+void ssm_pio_force_output(uint32_t v) {
+  pio_sm_put(SSM_PIO, BUFFER_SM, v);
+
+  __compiler_memory_barrier();
+
+  pio_sm_exec(SSM_PIO, BUFFER_SM,
+              pio_encode_pull(false, true) /* pull block */);
+
+  __compiler_memory_barrier();
+
+  pio_sm_exec(SSM_PIO, BUFFER_SM,
+              pio_encode_out(pio_pins, 32) /* out pins, 32 */);
 }
 
 void ssm_rp2040_forward_output(void) {
@@ -217,10 +237,18 @@ void ssm_rp2040_forward_output(void) {
     return;
 
   ssm_time_t later_time = ssm_to_sv(gpio_output_var)->later_time;
-  if (later_time != SSM_NEVER)
-    ssm_pio_schedule_output(
-        time_to_ctr(later_time),
-        ssm_unmarshal(ssm_to_sv(gpio_output_var)->later_value));
+  if (later_time != SSM_NEVER) {
+    uint32_t ctr = time_to_ctr(later_time),
+             val = ssm_unmarshal(ssm_to_sv(gpio_output_var)->later_value);
+
+    ssm_time_t cur_time = get_real_time();
+    if (cur_time + PIO_SCHED_OUTPUT_MARGIN < later_time)
+      // Schedule output
+      ssm_pio_schedule_output(ctr, val);
+    else
+      // Too late to schedule, output it as soon as possible (or drop?)
+      ssm_pio_force_output(val);
+  }
 }
 
 ssm_value_t rp2040_io_init(ssm_value_t input, ssm_value_t output) {
