@@ -1,0 +1,30 @@
+
+// Convert milliseconds to quanta
+ms t = t * 16000
+us t = t * 16
+
+blink led period delay =
+  let timer = new ()
+  loop
+    after delay, led <- 1 - deref led
+    after period, timer <- ()
+    wait timer
+
+button in led leddelay debounce =
+  let timer = new ()
+  loop
+    while deref in % 2 == 0
+      wait in
+    after leddelay, led <- 1 - deref led
+    after debounce, timer <- ()
+    wait timer
+    while deref in % 2 != 0
+      wait in    
+
+main gin gout =
+  let timer = new ()
+  after ms 2000, timer <- ()
+  wait timer
+  par blink gout (ms 500) (ms 10)
+      button gin gout (ms 10) (ms 5)
+    
