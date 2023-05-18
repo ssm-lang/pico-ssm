@@ -126,8 +126,8 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   assert(!already_called);
   already_called = true;
 
-  valid_params_if(PIO, input_base + input_count <= NUM_BANK0_GPIOS);
-  valid_params_if(PIO, output_base + output_count <= NUM_BANK0_GPIOS);
+  valid_params_if(PIO, input_count == 0 || input_base + input_count <= NUM_BANK0_GPIOS);
+  valid_params_if(PIO, output_count == 0 || output_base + output_count <= NUM_BANK0_GPIOS);
 
   // Claim state machines
   pio_sm_claim(SSM_PIO, INPUT_SM);
