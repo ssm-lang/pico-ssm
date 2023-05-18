@@ -119,7 +119,7 @@ static inline void setup_pio(uint input_base, uint input_count,
 
 /*** Entry point ***/
 
-ssm_value_t input_var = ssm_marshal(0), gpio_output_var = ssm_marshal(0);
+ssm_value_t gpio_input_var = ssm_marshal(0), gpio_output_var = ssm_marshal(0);
 
 void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
                         uint output_count, ssm_value_t *input_out,
@@ -138,8 +138,8 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   uint sm_mask = 0;
 
   if (input_count > 0) {
-    *input_out = input_var = ssm_new_sv(ssm_marshal(gpio_get(input_base)));
-    ssm_dup(input_var);
+    *input_out = gpio_input_var = ssm_new_sv(ssm_marshal(gpio_get(input_base)));
+    ssm_dup(gpio_input_var);
 
     setup_irq();
     setup_dma();
@@ -170,6 +170,9 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
 }
 
 int ssm_rp2040_try_input(ssm_time_t next_time) {
+  if (!ssm_on_heap(gpio_input_var))
+    return 0;
+
   // FIXME: write this
   return 0;
 }
