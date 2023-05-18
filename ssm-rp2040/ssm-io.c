@@ -3,7 +3,6 @@
 #include <hardware/irq.h>
 #include <hardware/pio.h>
 #include <hardware/timer.h>
-#include <stdlib.h>
 
 #include "ssm-input.pio.h"
 #include "ssm-output.pio.h"
@@ -142,8 +141,7 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
   }
 
   if (output_count > 0) {
-    *output_out = gpio_output_var =
-        ssm_new_sv(ssm_marshal(gpio_get(output_base)));
+    *output_out = gpio_output_var = ssm_new_sv(ssm_marshal(0));
     ssm_output_alarm_init(SSM_PIO, ALARM_SM);
     ssm_output_buffer_init(SSM_PIO, BUFFER_SM, output_base, output_count);
     sm_mask |= 1 << BUFFER_SM | 1 << ALARM_SM;

@@ -1,4 +1,3 @@
-
 // Convert milliseconds to quanta
 ms t = t * 16000
 us t = t * 16
@@ -19,7 +18,7 @@ button in led leddelay debounce =
     after debounce, timer <- ()
     wait timer
     while deref in % 2 != 0
-      wait in    
+      wait in
 
 main gin gout =
   let timer = new ()
@@ -27,4 +26,3 @@ main gin gout =
   wait timer
   par blink gout (ms 500) (ms 10)
       button gin gout (ms 10) (ms 5)
-    

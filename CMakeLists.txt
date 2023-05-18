@@ -16,7 +16,7 @@ pico_sdk_init()
 add_subdirectory(lib)
 
 # Defines the ssm-pio-header (header-only) and ssm-pio libraries
-add_subdirectory(pio)
+add_subdirectory(ssm-rp2040)
 
 # Where we can write unit tests for
 add_subdirectory(tests)

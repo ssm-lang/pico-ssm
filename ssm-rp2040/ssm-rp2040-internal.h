@@ -53,6 +53,7 @@ void ssm_rp2040_alarm_init(void);
  * might happen with long delays
  */
 static inline int set_alarm(ssm_time_t when) {
+  // FIXME: check whether we've missed the alarm
   uint64_t when_us = time_to_us(when);
   timer_hw->alarm[ALARM_NUM] = (uint32_t)when_us;
   return 1;

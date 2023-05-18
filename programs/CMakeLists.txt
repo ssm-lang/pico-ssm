@@ -1,14 +1,15 @@
-# Yes, globbing is terrible practice in CMake but I don't care.
+# This CMakeLists.txt scans the directory for sslang source files (*.ssl), and
+# builds an executable with each of them, linked against the ssm-rp2040 runtime.
+#
+# To add a new sslang program, just add another <name>.ssl file in the pwd.
+# The executable will be built to build/programs/<name>.elf.
+
 file(GLOB programs *.ssl)
 
 foreach(program_path ${programs})
     get_filename_component(program ${program_path} NAME_WLE)
     set(program_ssl ${program}.ssl)
     set(program_c ${program_ssl}.c)
-
-    message(WARNING ${program})
-    message(WARNING ${program_c})
-    message(WARNING ${program_ssl})
 
     add_executable(${program})
     target_sources(${program} PRIVATE ${program_c})
@@ -24,8 +25,8 @@ foreach(program_path ${programs})
       hardware_dma
     )
 
-    pico_enable_stdio_usb(${program} 1)
-    pico_enable_stdio_uart(${program} 0)
+    pico_enable_stdio_usb(${program} 0)
+    pico_enable_stdio_uart(${program} 1)
     pico_add_extra_outputs(${program})
 
     add_custom_Command(
