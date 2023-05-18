@@ -15,7 +15,9 @@ target_sources(ssm-rp2040
     PRIVATE ssm-mem.c
     PRIVATE ssm-throw.c
     PRIVATE ssm-io.c
-    PRIVATE ssm-rp2040.c
+    PRIVATE ssm-timer.c
+    PRIVATE ssm-alarm.c
+    PRIVATE ssm-tick.c
     PRIVATE ssm-rp2040-internal.h
 )
 
@@ -25,6 +27,7 @@ target_link_libraries(ssm-rp2040
     pico_stdlib
     hardware_pio
     hardware_clocks
+    hardware_dma
     ssm-pio-header
     ssm-runtime
 )
