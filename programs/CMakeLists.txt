@@ -13,7 +13,7 @@ foreach(program_path ${programs})
 
     add_executable(${program})
     target_sources(${program} PRIVATE ${program_c})
-    target_compile_options(${program} PRIVATE -Wall)
+    target_compile_options(${program} PRIVATE -Wall -Wno-parentheses)
 
     target_link_libraries(${program}
       pico_stdlib

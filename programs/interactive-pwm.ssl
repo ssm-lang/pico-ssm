@@ -1,28 +1,58 @@
+$$$
+#include <hardware/gpio.h>
+#include <stdio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+
+ssm_value_t log_pw(ssm_value_t pw) {
+    printf("Set pulse width to %lu\n", ssm_unmarshal(pw));
+    return ssm_marshal(0);
+}
+ssm_value_t dbg(ssm_value_t pw) {
+    printf("dbg %lu\n", ssm_unmarshal(pw));
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+extern log_pw : Int -> ()
+extern dbg : Int -> ()
+
 // This is what the primitive probably should have been called
 ref v = new v
 
 // Convert from microseconds to ticks (PLATFORM-SPECIFIC)
-us t =
-  t * 16
+us t = t * 16
+ms t = t * 16000
+
+sleep t =
+    let r = ref ()
+    after t, r <- ()
+    wait r
 
 // After receiving event on in, relay to out, but cooldown for t
 debounce t in out =
   let r = ref ()
   loop
+    while deref in == 0
+      // Wait until button is no longer pressed
+      wait in
+      sleep t
+
     wait in
-    out <- deref in
-    after t, r <- ()
-    wait r
+    out <- ()
+    sleep t
 
 // Upon each button press, toggle width between hi and lo values
 toggle_width hi lo in width =
-  let wait_for_button_press _ =
-    while deref in == 0
-      wait in
   loop
-    wait_for_button_press ()
+    log_pw (deref width)
+    wait in
     width <- hi
-    wait_for_button_press ()
+    log_pw (deref width)
+    wait in
     width <- lo
 
 // Emit pulse signal on out channel with given width and period.
@@ -30,6 +60,7 @@ toggle_width hi lo in width =
 emit_pwm period step width out =
   let w = ref (deref width)
   after period, out <- 1
+
   loop
     wait out
 
@@ -44,10 +75,15 @@ emit_pwm period step width out =
     after (period - deref w), out <- 1
 
 // Expects input and output be int references mapped to GPIO pins
-main (input: &Int) (output: &Int) =
-  let input_debounced = ref (deref input)
+main _ _ =
+  let (input, output) = rp2040_io_init (15, 1) (6, 1)
+  input_set_pullup 15
+
+  let input_debounced = ref ()
       width = ref (us 570)
 
-  par debounce (us 10) input input_debounced
+  sleep (ms 200)
+
+  par debounce (ms 3) input input_debounced
       toggle_width (us 120) (us 570) input_debounced width
-      emit_pwm (us 1000) (us 50) width output
+      emit_pwm (us 1000) (us 1) width output
