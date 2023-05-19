@@ -1,6 +1,9 @@
 // Blink an LED with a 100 us half period (5 kHz)
 //
-// Jitter-free, but doesn't work much past us 15 for the led delay
+// Jitter-free
+//
+// Acts as a clock skew detector: if the sleep clock is too far ahead,
+// the LED never lights
 //
 // Edit the ledPin number to taste
 
@@ -23,10 +26,10 @@ main _ =
   let timer = new ()
   let v = new 0
   loop
-    after us 15, led <- 1 - deref led
+    after us 98, led <- 1 - deref led
     after us 100, timer <- ()
-    //    waste_time (deref v)
-    //    v <- deref v + 1
+    waste_time (deref v)
+    v <- deref v + 1
     wait timer
 
 us t = t * 16 // Convert to 16 MHz timebase

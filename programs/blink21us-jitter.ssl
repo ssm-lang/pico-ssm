@@ -1,6 +1,6 @@
-// Blink an LED at 20 kHz
+// Blink an LED with a 21 us half period
 //
-// Jitter-free version when the clocks are synchronized
+// This is where it breaks: 3.92 us jitter
 //
 // Edit the ledPin number to taste
 
@@ -9,8 +9,8 @@ main _ =
   let (_, led) = rp2040_io_init (5, 0) (ledPin, 1)
   let timer = new ()
   loop
-    after us 23, led <- 1 - deref led
-    after us 25, timer <- ()
+    after us 20, led <- 1 - deref led
+    after us 21, timer <- ()
     wait timer
 
 us t = t * 16 // Convert to 16 MHz timebase
