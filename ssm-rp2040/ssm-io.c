@@ -18,7 +18,7 @@
 #define INPUT_IRQ PIO0_IRQ_0
 #define INPUT_IRQ_SOURCE PIO_INTR_SM0_LSB
 
-#define PIO_RING_BUFFER_LOG2_SIZE 6
+#define PIO_RING_BUFFER_LOG2_SIZE 8
 #define PIO_RING_BUFFER_SIZE (1 << PIO_RING_BUFFER_LOG2_SIZE)
 
 // How if scheduled output is within this margin, it is considered too late
