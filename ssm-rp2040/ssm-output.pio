@@ -51,7 +51,7 @@ static inline void ssm_output_buffer_init(PIO pio, uint sm, uint pin_base, uint 
         pio_gpio_init(pio, pin_base + i);
 
     // Set pins direction to out
-    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, pin_count, true);
 
     // Load program
     uint offset = pio_add_program(pio, &ssm_output_buffer_program);

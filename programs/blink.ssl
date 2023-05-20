@@ -1,0 +1,14 @@
+// Blink an LED at 1 Hz
+
+// Base input pin and count; Base output pin and count
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+
+ms t = t * 16000 // Convert to 16 MHz timebase
+
+main _ _ =
+  let (_, led) = rp2040_io_init (5, 0) (25, 1) // inputs outputs
+  loop
+    after ms 500, led <- 1 - deref led
+    wait led
+
+

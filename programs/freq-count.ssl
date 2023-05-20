@@ -1,0 +1,91 @@
+$$$
+#include <hardware/gpio.h>
+#include <stdio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+
+ssm_value_t time_eq(ssm_value_t l, ssm_value_t r) {
+    ssm_value_t ret = ssm_marshal(ssm_time_read(l) == ssm_time_read(r));
+    ssm_drop(l);
+    ssm_drop(r);
+    return ret;
+}
+
+ssm_value_t log_count(ssm_value_t c) {
+    printf("Count: %lu\n", ssm_unmarshal(c) / 2);
+    return ssm_marshal(0);
+}
+
+ssm_value_t updated(ssm_value_t r) {
+    return ssm_marshal(ssm_to_sv(r)->last_updated == ssm_now());
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+extern time_eq : Time -> Time -> Int
+extern log_count : Int -> ()
+extern updated : &a -> Int
+
+// Convert milliseconds to quanta
+ms t = t * 16000
+us t = t * 16
+
+/*
+// This is broken, it leaks memory
+updated r =
+  let n = now
+      t = @@r
+  time_eq n t
+*/
+
+fq input =
+  let count = new 0
+      gate = new ()
+  after (ms 1000), gate <- ()
+  loop
+    if updated gate
+      log_count (deref count)
+      if updated input
+        count <- 1
+      else
+        count <- 0
+      after (ms 1000), gate <- ()
+      wait gate
+      after (ms 1000), gate <- ()
+    else
+      count <- deref count + 1
+    wait gate || input
+
+/*
+// The break statement... breaks things (leaks memory as well XD)
+fq input =
+  loop
+    let count = new 0
+        timer = new ()
+
+    after (ms 1000), timer <- ()
+
+    loop
+      wait timer || input
+
+      let n = now
+          t = @@timer
+      if time_eq n t
+        break
+      else
+        count <- deref count + 1
+
+    log_count (deref count)
+
+    after (ms 1000), timer <- ()
+    wait timer
+*/
+
+main _ _ =
+  let (gin, _) = rp2040_io_init (15, 1) (0, 0)
+
+  input_set_pullup 15
+
+  fq gin

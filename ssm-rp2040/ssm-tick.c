@@ -12,13 +12,12 @@ int ssm_platform_entry(void) {
   ssm_rp2040_mem_init();
   ssm_rp2040_alarm_init();
 
-  // gpio_set_pulls(INPUT_PIN_BASE, true, false);
-  // ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
-  // uint output_count);
-
   // Prepare the sslang program to start
   extern ssm_act_t *__enter_main(ssm_act_t *, ssm_priority_t, ssm_depth_t,
                                  ssm_value_t *, ssm_value_t *);
+
+  // TODO: These arguments aren't even necessary anymore. We just keep them
+  // around as dummy SVs because that's what sslang's main function expects.
   ssm_value_t main_arg1 = ssm_new_sv(ssm_marshal(0));
   ssm_value_t main_arg2 = ssm_new_sv(ssm_marshal(0));
   ssm_value_t main_argv[2] = {main_arg1, main_arg2};
@@ -26,7 +25,7 @@ int ssm_platform_entry(void) {
   ssm_activate(__enter_main(&ssm_top_parent, SSM_ROOT_PRIORITY, SSM_ROOT_DEPTH,
                             main_argv, NULL));
 
-  ssm_tick(); // gpio_pins configured here
+  ssm_tick(); // GPIO pins configured by sslang program
 
   for (;;) {
     /* We must read real time before polling input to avoid this race condition:
@@ -59,6 +58,8 @@ int ssm_platform_entry(void) {
 
     __compiler_memory_barrier(); // Ensure get_real_time() before polling input
 
+    // printf("TICK: real %llu next %llu\n", real_time, next_time);
+
     if (ssm_rp2040_try_input(next_time) || next_time < real_time) {
       // Need to tick, either because of fresh input or because running behind
       ssm_tick();
@@ -80,5 +81,10 @@ int ssm_platform_entry(void) {
     }
   }
 
+  return 0;
+}
+
+int main(void) {
+  ssm_platform_entry();
   return 0;
 }

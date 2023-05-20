@@ -1,8 +1,11 @@
 #ifndef SSM_RP2040_INTERNAL_H
 #define SSM_RP2040_INTERNAL_H
 
-#include <pico/sem.h>
 #include <ssm-internal.h>
+
+#include <hardware/timer.h>
+#include <pico/platform.h>
+#include <pico/sem.h>
 
 /*** Timers ***/
 
@@ -44,8 +47,10 @@ extern semaphore_t ssm_tick_sem;
 
 void ssm_rp2040_alarm_init(void);
 
-#include <hardware/timer.h>
 #define ALARM_NUM 0
+
+#define ALARM_NO_SLEEP_MARGIN_US 0
+#define ALARM_BUSY_SLEEP_MARGIN_US PICO_TIME_SLEEP_OVERHEAD_ADJUST_US
 
 /* Set the alarm time
  *
@@ -53,7 +58,25 @@ void ssm_rp2040_alarm_init(void);
  * might happen with long delays
  */
 static inline int set_alarm(ssm_time_t when) {
+  uint64_t now_us = time_to_us(get_real_time());
   uint64_t when_us = time_to_us(when);
+
+  if (when_us < now_us + ALARM_NO_SLEEP_MARGIN_US)
+    // We've already missed our alarm, return prematurely
+    return 0;
+
+  if (when_us < now_us + ALARM_BUSY_SLEEP_MARGIN_US) {
+    // No point setting an alarm; busy sleep and then pretend we missed it
+
+    // Once timer_hw->timerawl advances past when_us, the difference will be
+    // a very large number due to unsigned wraparound.
+    while ((uint32_t)when_us - timer_hw->timerawl <
+           (uint32_t)ALARM_NO_SLEEP_MARGIN_US)
+      tight_loop_contents();
+
+    return 0;
+  }
+
   timer_hw->alarm[ALARM_NUM] = (uint32_t)when_us;
   return 1;
 }
@@ -72,8 +95,10 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
                         uint output_count, ssm_value_t *input_out,
                         ssm_value_t *output_out);
 
+// Poll for input, and schedule it if ready; returns non-zero if scheduled.
 int ssm_rp2040_try_input(ssm_time_t next_time);
 
+// Check output variable and forward any scheduled assignment to PIO.
 void ssm_rp2040_forward_output(void);
 
 #endif /* ifndef SSM_RP2040_INTERNAL_H */

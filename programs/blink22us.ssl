@@ -1,0 +1,20 @@
+// Blink an LED with a 22 us half period
+//
+// This is right at the edge: it's working, but any tighter and it starts
+// jittering
+//
+// Edit the ledPin number to taste
+
+main _ =
+  let ledPin = 14 // For my RP2040 Zero; adjust to taste
+  let (_, led) = rp2040_io_init (5, 0) (ledPin, 1)
+  let timer = new ()
+  loop
+    after us 20, led <- 1 - deref led
+    after us 22, timer <- ()
+    wait timer
+
+us t = t * 16 // Convert to 16 MHz timebase
+
+// Base input pin and count; Base output pin and count
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)

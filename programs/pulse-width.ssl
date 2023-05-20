@@ -1,0 +1,47 @@
+$$$
+#include <hardware/gpio.h>
+#include <stdio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+
+ssm_value_t get_time(ssm_value_t _) {
+    return ssm_marshal((uint32_t) ssm_now());
+}
+
+ssm_value_t log_result(ssm_value_t c) {
+    printf("Pulse width: %lu us (%lu ticks)\n", (uint32_t) ssm_unmarshal(c) >> 4, (uint32_t) ssm_unmarshal(c));
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+extern get_time : () -> Int
+extern log_result : Int -> ()
+
+// Convert milliseconds to quanta
+ms t = t * 16000
+us t = t * 16
+
+pw input result =
+  loop
+    wait input
+    let b = get_time ()
+    wait input
+    let a = get_time ()
+    result <- a - b
+
+log result =
+  loop
+    let timer = new ()
+    after (ms 500), timer <- ()
+    wait timer
+    log_result (deref result)
+
+main _ _ =
+  let (gin, _) = rp2040_io_init (15, 1) (0, 0)
+  input_set_pullup 15
+  let result = new 0
+  par pw gin result
+      log result
