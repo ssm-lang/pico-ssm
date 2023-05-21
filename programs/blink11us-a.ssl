@@ -1,6 +1,6 @@
 // Blink an LED with an 11 us half period
 //
-// This starts hopefully, then sjitters something awful
+// This starts hopefully, then jitters something awful
 //
 // Edit the ledPin number to taste
 
