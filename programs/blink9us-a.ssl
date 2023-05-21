@@ -1,6 +1,6 @@
-// Blink an LED with an 13 us half period
+// Blink an LED with an 9 us half period
 //
-// Stable.  This appears to be the fastest with this code
+// This starts hopefully, then jitters something awful
 //
 // Edit the ledPin number to taste
 
@@ -8,7 +8,7 @@ main _ =
   let ledPin = 14 // For my RP2040 Zero; adjust to taste
   let (_, led) = rp2040_io_init (5, 0) (ledPin, 1)
   loop
-    after us 13, led <- 1 - deref led
+    after us 9, led <- 1 - deref led
     wait led
 
 us t = t * 16 // Convert to 16 MHz timebase
