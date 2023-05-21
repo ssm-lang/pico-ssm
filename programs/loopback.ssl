@@ -15,6 +15,7 @@ ssm_value_t log_result(ssm_value_t expected, ssm_value_t got) {
 
     printf("Expected: %4ld us (%4ld ticks)\n", e >> 4, e);
     printf("Got:      %4ld us (%4ld ticks)\n", g >> 4, g);
+    printf("----\n");
     return ssm_marshal(0);
 }
 $$$
