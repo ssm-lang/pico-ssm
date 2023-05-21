@@ -107,7 +107,7 @@ width_ctl lo hi step cmd width =
                width <- deref width + step
       Down = if deref width - step >= lo
                width <- deref width - step
-    log_pw (deref width)
+    // log_pw (deref width)
 
 // Emit pulse signal on out channel with given width and period.
 // If width is changed, slowly grow the emitted pulse width one step at a time.
