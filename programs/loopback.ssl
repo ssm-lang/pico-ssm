@@ -1,0 +1,52 @@
+$$$
+#include <hardware/gpio.h>
+#include <stdio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+
+ssm_value_t get_time(ssm_value_t _) {
+    return ssm_marshal((uint32_t) ssm_now());
+}
+
+ssm_value_t log_result(ssm_value_t expected, ssm_value_t got) {
+    uint32_t e = ssm_unmarshal(expected), g = ssm_unmarshal(got);
+
+    printf("Expected: %4ld us (%4ld ticks)\n", e >> 4, e);
+    printf("Got:      %4ld us (%4ld ticks)\n", g >> 4, g);
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+extern get_time : () -> Int
+extern log_result : Int -> Int -> ()
+
+// Convert milliseconds to quanta
+ms t = t * 16000
+us t = t * 16
+
+sleep d =
+  let t = new ()
+  after d, t <- ()
+  wait t
+
+main _ _ =
+  // short pins 16 and 17 together
+  let (gin, gout) = rp2040_io_init (16, 1) (17, 1)
+
+  let d = us 200
+
+  loop
+    sleep (ms 500)
+
+    let b = get_time ()
+
+    after d, gout <- 1 - deref gin
+
+    wait gin
+
+    let a = get_time ()
+
+    log_result d (a - b)
