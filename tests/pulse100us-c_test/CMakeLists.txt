@@ -1,4 +1,4 @@
-set(test_name performance_test)
+set(test_name pulse100us-c)
 
 add_executable(${test_name})
 
