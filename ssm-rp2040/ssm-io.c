@@ -249,7 +249,7 @@ void ssm_rp2040_forward_output(void) {
     return;
 
   if (ssm_to_sv(gpio_output_var)->last_updated == ssm_now())
-    ssm_pio_force_output(ssm_unmarshal(ssm_to_sv(gpio_output_var)->later_value));
+    ssm_pio_force_output(ssm_unmarshal(ssm_to_sv(gpio_output_var)->value));
 
   ssm_time_t later_time = ssm_to_sv(gpio_output_var)->later_time;
 
