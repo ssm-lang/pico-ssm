@@ -37,7 +37,9 @@ main _ _ =
   // short pins 16 and 17 together
   let (gin, gout) = rp2040_io_init (16, 1) (17, 1)
 
-  let d = us 200
+  // Works as low as 17 us
+  // Note that "instant" assignments take around 220 to 240 ticks for this program
+  let d = us 18
 
   loop
     sleep (ms 500)

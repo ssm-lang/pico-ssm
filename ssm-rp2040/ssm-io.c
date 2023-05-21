@@ -9,7 +9,7 @@
 #include "ssm-rp2040-internal.h"
 
 // In 16MHz
-#define CTR_INIT_SKEW_OFFSET 32
+#define CTR_INIT_SKEW_OFFSET 38
 
 #define SSM_PIO pio0
 #define INPUT_SM 0
