@@ -4,26 +4,35 @@
 
 $$$
 #include <hardware/gpio.h>
+#include <stdio.h>
 ssm_value_t input_set_pullup(ssm_value_t in_pin) {
     gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+ssm_value_t dbg(ssm_value_t num) {
+    printf("dbg %ld\n", ssm_unmarshal(num));
     return ssm_marshal(0);
 }
 $$$
 
 
 main _ _ =
-  let inPin = 4   // My RP2040 Zero 
-      ledPin = 14 // RP2040 Zero
+  //let inPin = 4   // My RP2040 Zero
+  //    ledPin = 14 // RP2040 Zero
+  let inPin = 14  // My RP2040 Zero
+      ledPin = 15 // RP2040 Zero
   let (input, led) = rp2040_io_init (inPin, 1) (ledPin, 1)
   input_set_pullup inPin // For a physical button
+
   loop
     wait input
-    led <- 1
-    after us 100, led <- 0
-    
+    if deref input == 0
+      led <- 1
+      after us 100, led <- 0
 
 us t = t * 16 // Convert to 16 MHz timebase
 
 // Base input pin and count; Base output pin and count
 extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
 extern input_set_pullup : Int -> ()
+extern dbg : Int -> ()
