@@ -35,7 +35,7 @@
 pins_patch_0:
     in pins, IN_PINS    ; Read initial GPIO pins state
     in null, NULL_PINS  ; \ldots plus additional null values
-    mov x, isr          ; \ldots into X
+    mov x, isr [13]     ; Compensate for phase wrt ssm-output
 
 .wrap_target
 cmp:

@@ -22,11 +22,11 @@ main _ _ =
   let inPin = 14  // My RP2040 Zero
       ledPin = 15 // RP2040 Zero
   let (input, led) = rp2040_io_init (inPin, 1) (ledPin, 1)
-  input_set_pullup inPin // For a physical button
+  // input_set_pullup inPin // For a physical button
 
   loop
     wait input
-    if deref input == 0
+    if deref input == 1
       led <- 1
       after us 100, led <- 0
 
