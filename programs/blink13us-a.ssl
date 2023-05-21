@@ -1,0 +1,17 @@
+// Blink an LED with an 13 us half period
+//
+// Stable
+//
+// Edit the ledPin number to taste
+
+main _ =
+  let ledPin = 14 // For my RP2040 Zero; adjust to taste
+  let (_, led) = rp2040_io_init (5, 0) (ledPin, 1)
+  loop
+    after us 13, led <- 1 - deref led
+    wait led
+
+us t = t * 16 // Convert to 16 MHz timebase
+
+// Base input pin and count; Base output pin and count
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
