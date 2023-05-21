@@ -1,0 +1,141 @@
+$$$
+#include <hardware/gpio.h>
+#include <stdio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+
+ssm_value_t log_pw(ssm_value_t pw) {
+    printf("Set pulse width to %lu us\n", ssm_unmarshal(pw) >> 4);
+    return ssm_marshal(0);
+}
+ssm_value_t dbg(ssm_value_t pw) {
+    printf("dbg %lu\n", ssm_unmarshal(pw));
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+extern log_pw : Int -> ()
+extern dbg : Int -> ()
+
+type Cmd
+  Up
+  Down
+
+type QuadState
+  Q00
+  Q10
+  Q01
+  Q11
+
+type CmdStat
+  Neutral
+  Up1
+  Up2
+  Up3
+  Down1
+  Down2
+  Down3
+
+// Convert from microseconds to ticks (PLATFORM-SPECIFIC)
+us t = t * 16
+ms t = t * 16000
+
+sleep t =
+    let r = new ()
+    after t, r <- ()
+    wait r
+
+read_quad input =
+  if input == 0
+    Q00
+  else
+    if input == 1
+      Q01
+    else
+      if input == 2
+        Q10
+      else
+        Q11
+
+nominal_quad input =
+  match input
+    Q11 = 1
+    _   = 0
+
+
+parse_quad input cmd =
+  while !(nominal_quad (read_quad (deref input)))
+    wait input
+
+  let state = new Neutral
+  loop
+    wait input
+    state <- match (deref state, read_quad (deref input))
+                // Happy path for Up
+                (Neutral, Q10) = Up1
+                (Up1,     Q00) = Up2
+                (Up2,     Q01) = Up3
+                (Up3,     Q11) = cmd <- Up
+                                 Neutral
+                // Up glitches
+                (Up3,     Q00) = Up2
+                (Up2,     Q10) = Up1
+                (Up1,     Q11) = Neutral
+
+                // Happy path for Down
+                (Neutral, Q01) = Down1
+                (Down1,   Q00) = Down2
+                (Down2,   Q10) = Down3
+                (Down3,   Q11) = cmd <- Down
+                                 Neutral
+                // Down glitches
+                (Down3,   Q00) = Down2
+                (Down2,   Q01) = Down1
+                (Down1,   Q11) = Neutral
+
+                // Input too messed up, give up + reset
+                _              = Neutral
+
+width_ctl lo hi step cmd width =
+  loop
+    wait cmd
+    match deref cmd
+      Up   = if deref width + step <= hi
+               width <- deref width + step
+      Down = if deref width - step >= lo
+               width <- deref width - step
+    log_pw (deref width)
+
+// Emit pulse signal on out channel with given width and period.
+// If width is changed, slowly grow the emitted pulse width one step at a time.
+emit_pwm period step width out =
+  let w = new (deref width)
+  after period, out <- 1
+  loop
+    wait out
+    if deref width > deref w
+      w <- deref w + step
+    else
+      if deref width < deref w
+        w <- deref w - step
+    after deref w, out <- 0
+    wait out
+    after (period - deref w), out <- 1
+
+// Expects input and output be int references mapped to GPIO pins
+main _ _ =
+  let (input, output) = rp2040_io_init (16, 2) (25, 1)
+  input_set_pullup 16
+  input_set_pullup 17
+
+  let cmd = new Up
+      width = new (us 500)
+
+  sleep (ms 200)
+
+  par parse_quad input cmd
+      width_ctl (us 20) (us 980) (us 20) cmd width
+      emit_pwm (us 1000) (us 1) width output

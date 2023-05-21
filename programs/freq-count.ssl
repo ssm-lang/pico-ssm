@@ -14,7 +14,7 @@ ssm_value_t time_eq(ssm_value_t l, ssm_value_t r) {
 }
 
 ssm_value_t log_count(ssm_value_t c) {
-    printf("Count: %lu\n", ssm_unmarshal(c) / 2);
+    printf("Frequency: %lu Hz (count: %lu)\n", ssm_unmarshal(c) / 2, ssm_unmarshal(c));
     return ssm_marshal(0);
 }
 
