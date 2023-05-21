@@ -84,8 +84,9 @@ fq input =
 */
 
 main _ _ =
-  let (gin, _) = rp2040_io_init (15, 1) (0, 0)
+  let inPin = 14
+  let (gin, _) = rp2040_io_init (inPin, 1) (0, 0)
 
-  input_set_pullup 15
+  input_set_pullup inPin
 
   fq gin

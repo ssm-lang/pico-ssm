@@ -40,8 +40,9 @@ log result =
     log_result (deref result)
 
 main _ _ =
-  let (gin, _) = rp2040_io_init (15, 1) (0, 0)
-  input_set_pullup 15
+  let inPin = 14
+      (gin, _) = rp2040_io_init (inPin, 1) (0, 0)
+  input_set_pullup inPin
   let result = new 0
   par pw gin result
       log result
