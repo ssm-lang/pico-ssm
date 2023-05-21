@@ -80,7 +80,7 @@ parse_quad input cmd =
                 (Up2,     Q01) = Up3
                 (Up3,     Q11) = cmd <- Up
                                  Neutral
-                // Up glitches
+                // Up glitches, backtrack progress
                 (Up3,     Q00) = Up2
                 (Up2,     Q10) = Up1
                 (Up1,     Q11) = Neutral
@@ -91,7 +91,7 @@ parse_quad input cmd =
                 (Down2,   Q10) = Down3
                 (Down3,   Q11) = cmd <- Down
                                  Neutral
-                // Down glitches
+                // Down glitches, backtrack progress
                 (Down3,   Q00) = Down2
                 (Down2,   Q01) = Down1
                 (Down1,   Q11) = Neutral
