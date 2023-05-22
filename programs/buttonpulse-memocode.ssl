@@ -1,0 +1,57 @@
+// Pulse the LED for 200 ms every time a button is pressed
+//
+// Demonstrates debouncing and building abstractions
+
+$$$
+#include <hardware/gpio.h>
+ssm_value_t input_set_pullup(ssm_value_t in_pin) {
+    gpio_set_pulls(ssm_unmarshal(in_pin), true, false);
+    return ssm_marshal(0);
+}
+$$$
+extern rp2040_io_init : (Int, Int) -> (Int, Int) -> (&Int, &Int)
+extern input_set_pullup : Int -> ()
+
+// Convert milliseconds to quanta
+ms t = t * 16000
+us t = t * 16
+
+main _ _ =
+  let ledPin = 14 // RP2040 Zero
+      buttonPin = 4 // RP2040 Zero
+  let (button, led) = rp2040_io_init (buttonPin, 1) (ledPin, 1)
+  input_set_pullup buttonPin
+
+  // Pulse once on power-up as a self-test
+  after ms 500, led <- 1
+  wait led
+  after ms 500, led <- 0
+  wait led
+
+  buttonpulse button led
+
+sleep delay = 
+  let timer = new ()        // a pure event                   
+  after delay, timer <- ()  // schedule wake time            
+  wait timer                // suspend until them
+
+waitfor var val = while deref var != val
+                    wait var
+    
+debounce delay input event = loop
+  waitfor input 0  // Button pressed
+  event <- ()      // Send event
+  sleep delay      // Debounce
+  waitfor input 1  // Button released
+  sleep delay      // Debounce
+      
+pulse period event output = loop
+  wait event
+  output <- 1                // Pulse high immediately
+  after period, output <- 0  // Stop after period
+  wait output
+
+buttonpulse button led =
+  let press = new ()
+  par debounce (ms 10)  button press
+      pulse    (ms 200) press  led
