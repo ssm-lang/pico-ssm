@@ -9,10 +9,11 @@
 #include "ssm-rp2040-internal.h"
 
 // In 16MHz
-#define CTR_INIT_SKEW_OFFSET 38
+// #define CTR_INIT_SKEW_OFFSET 40
+#define CTR_INIT_SKEW_OFFSET_US 3
 
 #define SSM_PIO pio0
-#define INPUT_SM 0
+#define INPUT_SM 2
 
 #define SSM_PIO_IRQ_ENABLE_SOURCE pio_set_irq0_source_enabled
 #define INPUT_IRQ PIO0_IRQ_0
@@ -30,8 +31,8 @@ uint8_t pio_ring_buffer[PIO_RING_BUFFER_SIZE]
     __attribute((aligned(PIO_RING_BUFFER_SIZE)));
 
 // State machines related to the output system
-#define ALARM_SM 1
-#define BUFFER_SM 2
+#define ALARM_SM 0
+#define BUFFER_SM 1
 
 // DMA channel for managing the ring buffer
 int pio_input_dma_channel;
@@ -166,7 +167,7 @@ void ssm_rp2040_io_init(uint input_base, uint input_count, uint output_base,
     // compiler doesn't reorder anything past this point.
     __compiler_memory_barrier();
 
-    uint32_t ctr_init = ~((timer_hw->timerawl << 4) + CTR_INIT_SKEW_OFFSET);
+    uint32_t ctr_init = ~((timer_hw->timerawl + CTR_INIT_SKEW_OFFSET_US) << 4);
 
     pio_sm_put(SSM_PIO, INPUT_SM, ctr_init);
     pio_sm_put(SSM_PIO, ALARM_SM, ctr_init);
