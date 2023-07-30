@@ -9,13 +9,13 @@ RP2040 bindings for [sslang][sslang] and its [ssm-runtime][ssm-runtime].
 
 You will need the Sslang compiler, `sslc`, to generate SSM programs that link
 against the `ssm-runtime`. You should build and install it [from
-source][sslang], and make it available on your `PATH`. Alternatively, you may
+source][sslang], and make it available on your `PATH`. (Alternatively, you may
 [patch the CMakeLists.txt](programs/CMakeLists.txt#L34) to point directly to
-where `sslc` is installed.
+where `sslc` is installed.)
 
 This project needs to be built using Raspberry Pi's [Pico SDK][pico-sdk]. We've
 vendored that library in this repo so you won't need to obtain it separately,
-but you will need to install its dependencies yourself; see below.
+but you will need to install its dependencies yourself:
 
 [pico-sdk]: https://github.com/raspberrypi/pico-sdk
 
